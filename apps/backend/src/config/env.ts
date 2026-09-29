@@ -6,6 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   PORT: z.coerce.number().default(5000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  SKIP_DEMO_SEED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   APP_NAME: z.string().default('MARCOS'),
   APP_VERSION: z.string().default('1.0.0'),
   DATABASE_URL: z.string().url(),

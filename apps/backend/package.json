@@ -8,6 +8,7 @@
     "start:pm2": "pm2 start dist/index.js --name marcos-backend --attach",
     "dev": "nodemon --watch src -e ts --exec ts-node src/index.ts",
     "reset:admin": "ts-node src/reset_admin.ts",
+    "seed:clothing-categories": "node dist/seedClothingCategories.js",
     "flush:cache": "node flush_cache.js",
     "db:indexes": "node create_indexes.js"
   },

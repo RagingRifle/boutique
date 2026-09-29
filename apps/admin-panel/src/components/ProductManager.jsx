@@ -13,6 +13,7 @@ import {
   Image
 } from 'lucide-react';
 import api from '../utils/api';
+import CustomizationGroupsEditor from './CustomizationGroupsEditor';
 
 export default function ProductManager() {
   const [products, setProducts] = useState([]);
@@ -34,6 +35,8 @@ export default function ProductManager() {
     categoryId: '',
     inventoryQty: '',
     targetGender: 'UNISEX',
+    inheritCategoryCustomizations: true,
+    customizationGroups: [],
     isTrending: false,
     trendingScheduledAt: '',
     images: [''],
@@ -158,6 +161,8 @@ export default function ProductManager() {
       categoryId: flatCategories.length > 0 ? flatCategories[0].id : '',
       inventoryQty: '10',
       targetGender: 'UNISEX',
+      inheritCategoryCustomizations: true,
+      customizationGroups: [],
       isTrending: false,
       trendingScheduledAt: '',
       images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500'],
@@ -177,6 +182,8 @@ export default function ProductManager() {
       categoryId: product.categoryId,
       inventoryQty: String(product.inventoryQty),
       targetGender: product.targetGender || 'UNISEX',
+      inheritCategoryCustomizations: product.inheritCategoryCustomizations !== false,
+      customizationGroups: product.customizationGroups || [],
       isTrending: product.isTrending,
       trendingScheduledAt: product.trendingScheduledAt ? product.trendingScheduledAt.slice(0, 16) : '',
       images: product.images,
@@ -204,6 +211,14 @@ export default function ProductManager() {
       categoryId: formData.categoryId,
       inventoryQty: Number(formData.inventoryQty),
       targetGender: formData.targetGender,
+      inheritCategoryCustomizations: formData.inheritCategoryCustomizations,
+      customizationGroups: formData.customizationGroups
+        .map(group => ({
+          ...group,
+          name: (group.name || '').trim(),
+          options: (group.options || []).map(option => ({ ...option, name: (option.name || '').trim(), price: Number(option.price || 0) })).filter(option => option.name),
+        }))
+        .filter(group => group.name && group.options.length),
       isTrending: formData.isTrending,
       trendingScheduledAt: formData.isTrending && formData.trendingScheduledAt ? new Date(formData.trendingScheduledAt).toISOString() : undefined,
       images: formData.images.filter(img => img.trim() !== ''),
@@ -612,6 +627,18 @@ export default function ProductManager() {
                   className="w-full text-xs border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:border-brand-500"
                 />
               </div>
+
+              <section className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-700">Customer customizations and add-ons</h4>
+                  <p className="mt-1 text-[10px] text-slate-500">Category options are inherited by default. Add dress-specific choices or turn inheritance off for this product.</p>
+                </div>
+                <label className="flex items-start gap-2 text-xs font-semibold text-slate-600">
+                  <input type="checkbox" checked={formData.inheritCategoryCustomizations} onChange={event => setFormData({ ...formData, inheritCategoryCustomizations: event.target.checked })} className="mt-0.5" />
+                  Use options configured on this product's category and parent categories
+                </label>
+                <CustomizationGroupsEditor value={formData.customizationGroups} onChange={customizationGroups => setFormData({ ...formData, customizationGroups })} inherited={formData.inheritCategoryCustomizations} />
+              </section>
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase block">Product Images (Up to 4) *</label>

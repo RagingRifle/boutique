@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Check, ChevronDown, ChevronRight, FolderPlus, Image as ImageIcon,
-  Layers, Loader, Pencil, Plus, Trash2, Upload, X,
+  Layers, Loader, Pencil, Plus, Trash2, Upload, X, Settings2,
 } from 'lucide-react';
 import api from '../utils/api';
+import CustomizationGroupsEditor from './CustomizationGroupsEditor';
 
 const slugify = (value) => value.trim().toLowerCase()
   .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
@@ -140,13 +141,14 @@ export default function CategoryManager() {
   );
 }
 
-function CategoryNode({ category, depth, reload }) {
+function CategoryNode({ category, depth, reload, parentSlug = '' }) {
   const [expanded, setExpanded] = useState(depth === 0);
   const [mode, setMode] = useState('');
   const [name, setName] = useState(category.name);
   const [imageUrl, setImageUrl] = useState(category.imageUrl || '');
   const [subName, setSubName] = useState('');
   const [subImageUrl, setSubImageUrl] = useState('');
+  const [customizationGroups, setCustomizationGroups] = useState(category.customizationGroups || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const children = category.subCategories || [];
@@ -156,7 +158,8 @@ function CategoryNode({ category, depth, reload }) {
     if (!name.trim()) return;
     setSaving(true); setError('');
     try {
-      await api.updateCategory(category.id, { name: name.trim(), slug: slugify(name), imageUrl });
+      const baseSlug = slugify(name);
+      await api.updateCategory(category.id, { name: name.trim(), slug: parentSlug ? `${parentSlug}-${baseSlug}` : baseSlug, imageUrl });
       setMode(''); await reload();
     } catch (saveError) { setError(saveError.message || 'Could not update category.'); }
     finally { setSaving(false); }
@@ -167,9 +170,26 @@ function CategoryNode({ category, depth, reload }) {
     if (!subName.trim()) return;
     setSaving(true); setError('');
     try {
-      await api.createCategory({ name: subName.trim(), slug: slugify(subName), imageUrl: subImageUrl || undefined, order: children.length + 1, parentId: category.id });
+      await api.createCategory({ name: subName.trim(), slug: `${category.slug}-${slugify(subName)}`, imageUrl: subImageUrl || undefined, order: children.length + 1, parentId: category.id });
       setSubName(''); setSubImageUrl(''); setMode(''); setExpanded(true); await reload();
     } catch (saveError) { setError(saveError.message || 'Could not create subcategory.'); }
+    finally { setSaving(false); }
+  };
+
+  const saveCustomizations = async (event) => {
+    event.preventDefault();
+    const groups = customizationGroups
+      .map(group => ({
+        ...group,
+        name: (group.name || '').trim(),
+        options: (group.options || []).map(option => ({ ...option, name: (option.name || '').trim(), price: Number(option.price || 0) })).filter(option => option.name),
+      }))
+      .filter(group => group.name && group.options.length);
+    setSaving(true); setError('');
+    try {
+      await api.updateCategory(category.id, { customizationGroups: groups });
+      setCustomizationGroups(groups); setMode(''); await reload();
+    } catch (saveError) { setError(saveError.message || 'Could not save category options.'); }
     finally { setSaving(false); }
   };
 
@@ -191,6 +211,7 @@ function CategoryNode({ category, depth, reload }) {
         <div className="flex shrink-0 items-center gap-1 opacity-100 sm:opacity-60 sm:group-hover:opacity-100">
           <button type="button" onClick={() => { setMode(mode === 'add' ? '' : 'add'); setError(''); }} title="Add subcategory" className="rounded-lg p-2 text-brand-600 hover:bg-brand-50"><Plus className="h-4 w-4" /></button>
           <button type="button" onClick={() => { setName(category.name); setImageUrl(category.imageUrl || ''); setMode(mode === 'edit' ? '' : 'edit'); setError(''); }} title="Edit category" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><Pencil className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { setCustomizationGroups(category.customizationGroups || []); setMode(mode === 'options' ? '' : 'options'); setError(''); }} title="Configure customer options" className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50"><Settings2 className="h-4 w-4" /></button>
           <button type="button" onClick={remove} title="Delete category" className="rounded-lg p-2 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
         </div>
       </div>
@@ -207,7 +228,12 @@ function CategoryNode({ category, depth, reload }) {
         <div className="space-y-1 text-xs font-semibold text-slate-600">Cover image<ImagePicker value={subImageUrl} onChange={setSubImageUrl} disabled={saving} /></div>
         <div className="flex gap-2"><button disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{saving ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}Create subcategory</button><button type="button" onClick={() => setMode('')} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Cancel</button></div>
       </form>}
-      {expanded && children.map((child) => <CategoryNode key={child.id} category={child} depth={depth + 1} reload={reload} />)}
+      {mode === 'options' && <form onSubmit={saveCustomizations} className="space-y-4 bg-indigo-50/60 px-5 py-4" style={{ marginLeft: `${51 + depth * 22}px` }}>
+        <div><p className="text-sm font-bold text-slate-700">Customer customizations and add-ons</p><p className="text-xs text-slate-500">These choices and prices apply to products in this category and all its subcategories.</p></div>
+        <CustomizationGroupsEditor value={customizationGroups} onChange={setCustomizationGroups} />
+        <div className="flex gap-2"><button disabled={saving} className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save options'}</button><button type="button" onClick={() => setMode('')} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Cancel</button></div>
+      </form>}
+      {expanded && children.map((child) => <CategoryNode key={child.id} category={child} depth={depth + 1} reload={reload} parentSlug={category.slug} />)}
     </div>
   );
 }

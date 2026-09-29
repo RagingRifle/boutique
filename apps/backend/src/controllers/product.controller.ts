@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../config/db.js';
 import { StockStatus } from '@prisma/client';
 import redis from '../config/redis.js';
+import { getEffectiveCustomizationGroups, resolveSelectedCustomizations, selectedCustomizationsSchema } from '../utils/customizations.js';
 
 // Capped in-memory LRU-like cache for search variations (stores up to 200 unique queries)
 const searchVariationsCache = new Map<string, string[]>();
@@ -153,6 +154,7 @@ export const cartAddSchema = z.object({
   body: z.object({
     productId: z.string().uuid(),
     quantity: z.coerce.number().int().min(1),
+    selectedCustomizations: selectedCustomizationsSchema.default([]),
   }),
 });
 
@@ -359,6 +361,7 @@ export class ProductController {
 
       const processedProduct = {
         ...product,
+        customizationGroups: await getEffectiveCustomizationGroups(prisma, product),
         hasFreeShipping
       };
 
@@ -412,6 +415,7 @@ export class ProductController {
 
       const processedItems = items.map(item => ({
         ...item,
+        unitPrice: Number(item.product.price) + (((item.selectedCustomizations as any[] | null) || []).reduce((sum, group) => sum + (group.options || []).reduce((optionSum: number, option: any) => optionSum + Number(option.price || 0), 0), 0)),
         product: {
           ...item.product,
           hasFreeShipping: storewideFreeShipping || freeShippingProductIds.has(item.product.id) || freeShippingCategoryIds.has(item.product.categoryId)
@@ -431,7 +435,7 @@ export class ProductController {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-    const { productId, quantity } = req.body;
+    const { productId, quantity, selectedCustomizations = [] } = req.body;
 
     try {
       const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -447,12 +451,20 @@ export class ProductController {
         });
       }
 
+      let resolvedOptions;
+      try {
+        const groups = await getEffectiveCustomizationGroups(prisma, product);
+        resolvedOptions = resolveSelectedCustomizations(groups, selectedCustomizations);
+      } catch (customizationError: any) {
+        return res.status(400).json({ success: false, message: customizationError.message || 'Invalid customization selection.' });
+      }
+
       const cartItem = await prisma.cartItem.upsert({
         where: {
           userId_productId: { userId, productId },
         },
-        update: { quantity },
-        create: { userId, productId, quantity },
+        update: { quantity, selectedCustomizations: resolvedOptions.selectedCustomizations as any },
+        create: { userId, productId, quantity, selectedCustomizations: resolvedOptions.selectedCustomizations as any },
       });
 
       // Log ADD_TO_CART event asynchronously to Redis list

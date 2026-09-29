@@ -3,12 +3,14 @@ import { z } from 'zod';
 import prisma from '../config/db.js';
 import { createAuditLog } from '../utils/audit.js';
 import redis from '../config/redis.js';
+import { customizationGroupsSchema } from '../utils/customizations.js';
 
 export const categoryCreateSchema = z.object({
   body: z.object({
     name: z.string().min(1),
     slug: z.string().min(1),
     imageUrl: z.union([z.string().url(), z.literal('')]).optional(),
+    customizationGroups: customizationGroupsSchema.optional(),
     order: z.coerce.number().int().default(0),
     parentId: z.string().uuid().optional().nullable(),
   }),
@@ -19,6 +21,7 @@ export const categoryUpdateSchema = z.object({
     name: z.string().min(1).optional(),
     slug: z.string().min(1).optional(),
     imageUrl: z.union([z.string().url(), z.literal('')]).optional(),
+    customizationGroups: customizationGroupsSchema.optional(),
     order: z.coerce.number().int().optional(),
     parentId: z.string().uuid().optional().nullable(),
   }),
@@ -40,7 +43,7 @@ export class AdminCategoryController {
    * POST /admin/categories
    */
   static async createCategory(req: Request, res: Response, next: NextFunction) {
-    const { name, slug, order, imageUrl, parentId } = req.body;
+    const { name, slug, order, imageUrl, parentId, customizationGroups } = req.body;
 
     try {
       const existing = await prisma.category.findFirst({
@@ -52,7 +55,7 @@ export class AdminCategoryController {
       }
 
       const category = await prisma.category.create({
-        data: { name, slug, order, imageUrl: imageUrl || null, parentId: parentId || null },
+        data: { name, slug, order, imageUrl: imageUrl || null, parentId: parentId || null, customizationGroups: customizationGroups ?? undefined },
       });
 
       await createAuditLog({
@@ -85,7 +88,7 @@ export class AdminCategoryController {
    */
   static async updateCategory(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
-    const { name, slug, order, imageUrl, parentId } = req.body;
+    const { name, slug, order, imageUrl, parentId, customizationGroups } = req.body;
 
     try {
       const existing = await prisma.category.findUnique({ where: { id } });
@@ -95,7 +98,7 @@ export class AdminCategoryController {
 
       const category = await prisma.category.update({
         where: { id },
-        data: { name, slug, order, imageUrl: imageUrl === undefined ? undefined : imageUrl || null, parentId: parentId !== undefined ? parentId : undefined },
+        data: { name, slug, order, imageUrl: imageUrl === undefined ? undefined : imageUrl || null, parentId: parentId !== undefined ? parentId : undefined, customizationGroups: customizationGroups === undefined ? undefined : customizationGroups },
       });
 
       await createAuditLog({

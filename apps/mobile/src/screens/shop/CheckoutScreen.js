@@ -447,7 +447,7 @@ export default function CheckoutScreen({ route, navigation }) {
   };
 
   // Mathematical pricing calculations
-  const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.product.price) * item.quantity), 0);
+  const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.unitPrice ?? item.product.price) * item.quantity), 0);
 
   let discountVal = 0;
   if (appliedCoupon) {
@@ -500,7 +500,11 @@ export default function CheckoutScreen({ route, navigation }) {
       const checkoutItems = cartItems.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        price: Number(item.product.price),
+        price: Number(item.unitPrice ?? item.product.price),
+        selectedCustomizations: (item.selectedCustomizations || []).map(group => ({
+          groupId: group.groupId,
+          optionIds: (group.options || []).map(option => option.optionId),
+        })),
       }));
 
       const payload = {
@@ -1016,7 +1020,7 @@ export default function CheckoutScreen({ route, navigation }) {
 
           <View style={styles.itemsSummaryList}>
             {cartItems.map((item) => {
-              const itemTotal = Number(item.product.price) * item.quantity;
+              const itemTotal = Number(item.unitPrice ?? item.product.price) * item.quantity;
               return (
                 <View key={item.id} style={[styles.summaryItemCard, shadows.premium, { backgroundColor: theme.bg.card }]}>
                   <Image
@@ -1031,7 +1035,7 @@ export default function CheckoutScreen({ route, navigation }) {
                       Size: L · Qty: {item.quantity}
                     </Text>
                     <Text style={[styles.summaryItemPrice, { fontFamily: fonts.bold, color: theme.text.primary }]}>
-                      ₹{Number(item.product.price).toLocaleString('en-IN', { maximumFractionDigits: 0 })} × {item.quantity} = ₹{itemTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      ₹{Number(item.unitPrice ?? item.product.price).toLocaleString('en-IN', { maximumFractionDigits: 0 })} × {item.quantity} = ₹{itemTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
                   </View>
                 </View>

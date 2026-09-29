@@ -171,6 +171,10 @@ export default function OrderHistoryScreen({ navigation }) {
         await api.post('/products/cart', {
           productId: item.productId,
           quantity: item.quantity || 1,
+          selectedCustomizations: (item.selectedCustomizations || []).map(group => ({
+            groupId: group.groupId,
+            optionIds: (group.options || []).map(option => option.optionId),
+          })),
         });
       }
       
@@ -276,6 +280,9 @@ export default function OrderHistoryScreen({ navigation }) {
   const renderOrderItem = ({ item }) => {
     const cfg = getStatusConfig(item);
     const mainItem = item.orderItems?.[0];
+    const customizationSummary = (mainItem?.selectedCustomizations || [])
+      .map(group => `${group.name}: ${(group.options || []).map(option => option.name).join(', ')}`)
+      .join(' · ');
     const extra = (item.orderItems?.length || 0) - 1;
     const date = new Date(item.createdAt).toLocaleDateString('en-IN', {
       day: 'numeric', month: 'short', year: 'numeric',
@@ -321,6 +328,7 @@ export default function OrderHistoryScreen({ navigation }) {
             <Text style={[styles.productSub, { fontFamily: fonts.regular, color: theme.text.muted, marginTop: 2 }]}>
               {extra > 0 ? `+${extra} more · Custom Fit` : 'Custom Fit Tailoring'}
             </Text>
+            {customizationSummary ? <Text style={{ fontSize: 11, fontFamily: fonts.medium, color: theme.text.secondary, marginTop: 4 }} numberOfLines={2}>{customizationSummary}</Text> : null}
             <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: theme.text.secondary, marginTop: 4 }} numberOfLines={2}>
               {getStatusDescription(item)}
             </Text>

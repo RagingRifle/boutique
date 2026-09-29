@@ -821,7 +821,10 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       const unitPrice = Number(item.price || (order.payableAmount / qty));
       const totalAmount = unitPrice * qty;
       const fabricInfo = item.fabricType || item.product?.materialInfo || order.fabricType;
-      const detailsStr = fabricInfo ? `<div style="font-size: 10px; color: #666; font-weight: normal; margin-top: 2px;">Fabric / Material: ${fabricInfo}</div>` : '';
+      const customizationText = (item.selectedCustomizations || [])
+        .map(group => `${group.name}: ${(group.options || []).map(option => option.name).join(', ')}`)
+        .join(' · ');
+      const detailsStr = `${fabricInfo ? `<div style="font-size: 10px; color: #666; font-weight: normal; margin-top: 2px;">Fabric / Material: ${fabricInfo}</div>` : ''}${customizationText ? `<div style="font-size: 10px; color: #555; font-weight: normal; margin-top: 2px;">Customer choices: ${customizationText}</div>` : ''}`;
 
       return `
         <tr>

@@ -9,6 +9,7 @@ import JobsProducer from '../queues/jobs.producer.js';
 import { getIO } from '../socket/socket.handler.js';
 import redis from '../config/redis.js';
 import PdfService from '../services/pdf.service.js';
+import { getEffectiveCustomizationGroups, resolveSelectedCustomizations, selectedCustomizationsSchema } from '../utils/customizations.js';
 
 export const orderStatusUpdateSchema = z.object({
   body: z.object({
@@ -35,7 +36,8 @@ export const orderCheckoutSchema = z.object({
     items: z.array(z.object({
       productId: z.string().uuid(),
       quantity: z.coerce.number().int().min(1),
-      price: z.coerce.number().positive(),
+      price: z.coerce.number().positive().optional(),
+      selectedCustomizations: selectedCustomizationsSchema.default([]),
     })).min(1),
     discountAmount: z.coerce.number().nonnegative().default(0),
     paymentMethod: z.enum(['CASH', 'CARD', 'ONLINE']).default('ONLINE'),
@@ -721,8 +723,25 @@ export class OrderController {
         });
         const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
+        const pricedItems = items.map((item: any) => {
+          const product = productMap.get(item.productId);
+          if (!product) throw new Error(`Product ${item.productId} not found`);
+          const groupsPromise = getEffectiveCustomizationGroups(tx, product);
+          return groupsPromise;
+        });
+        const effectiveGroupsByItem = await Promise.all(pricedItems);
+        const normalizedItems = items.map((item: any, index: number) => {
+          const product = productMap.get(item.productId);
+          const resolved = resolveSelectedCustomizations(effectiveGroupsByItem[index], item.selectedCustomizations || []);
+          return {
+            ...item,
+            price: Number(product.price) + resolved.priceAdjustment,
+            selectedCustomizations: resolved.selectedCustomizations,
+          };
+        });
+
         // 1. Verify inventory in-memory first using pre-fetched products
-        for (const item of items) {
+        for (const item of normalizedItems) {
           const product = productMap.get(item.productId);
           if (!product) {
             throw new Error(`Product ${item.productId} not found`);
@@ -733,9 +752,9 @@ export class OrderController {
         }
 
         // 2. Perform bulk inventory deduction using a single raw SQL query
-        if (items.length > 0) {
+        if (normalizedItems.length > 0) {
           const values: string[] = [];
-          for (const item of items) {
+          for (const item of normalizedItems) {
             const product = productMap.get(item.productId);
             const newInventoryQty = product.inventoryQty - item.quantity;
             const newStockStatus = computeStockStatus(newInventoryQty);
@@ -755,12 +774,12 @@ export class OrderController {
 
           const updatedRows = await tx.$executeRawUnsafe(query);
           
-          if (updatedRows !== items.length) {
+          if (updatedRows !== normalizedItems.length) {
             throw new Error('Concurrent inventory update failure. Insufficient stock during checkout.');
           }
         }
 
-        for (const item of items) {
+        for (const item of normalizedItems) {
           subtotal += Number(item.price) * item.quantity;
         }
 
@@ -873,16 +892,17 @@ export class OrderController {
 
         // Insert Order Items
         await tx.orderItem.createMany({
-          data: items.map((item: any) => ({
+          data: normalizedItems.map((item: any) => ({
             orderId: newOrder.id,
             productId: item.productId,
             quantity: item.quantity,
             price: item.price,
+            selectedCustomizations: item.selectedCustomizations as any,
           }))
         });
 
         // Clear only checked-out items from the user's cart
-        const purchasedProductIds = items.map((item: any) => item.productId);
+        const purchasedProductIds = normalizedItems.map((item: any) => item.productId);
         await tx.cartItem.deleteMany({
           where: {
             userId,

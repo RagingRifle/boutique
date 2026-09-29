@@ -40,6 +40,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const [isFav, setIsFav] = useState(false);
   const [isInCart, setIsInCart] = useState(false);
   const [selectedSize, setSelectedSize] = useState('L'); // S, M, L, XL
+  const [selectedCustomizations, setSelectedCustomizations] = useState({});
   const [adding, setAdding] = useState(false);
   const [activeThumbnailIndex, setActiveThumbnailIndex] = useState(0);
   
@@ -95,7 +96,11 @@ export default function ProductDetailsScreen({ route, navigation }) {
       }
 
       if (cartRes.success && cartRes.data) {
-        setIsInCart(cartRes.data.some(item => item.productId === productId));
+        const cartItem = cartRes.data.find(item => item.productId === productId);
+        setIsInCart(Boolean(cartItem));
+        setSelectedCustomizations(cartItem?.selectedCustomizations
+          ? Object.fromEntries(cartItem.selectedCustomizations.map(group => [group.groupId, group.options.map(option => option.optionId)]))
+          : {});
       }
       if (favRes.success && favRes.data) {
         setIsFav(favRes.data.some(item => item.productId === productId));
@@ -132,8 +137,9 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const handleAddToCart = async () => {
     requireAuth(async () => {
       if (!product) return;
-    if (isInCart) {
-      navigation.navigate('Cart');
+    const missingRequired = (product.customizationGroups || []).find(group => group.required && !(selectedCustomizations[group.id] || []).length);
+    if (missingRequired) {
+      Alert.alert('Choose an option', `Please choose an option for ${missingRequired.name}.`);
       return;
     }
 
@@ -142,13 +148,14 @@ export default function ProductDetailsScreen({ route, navigation }) {
       const res = await api.post('/products/cart', {
         productId: product.id,
         quantity: quantity,
+        selectedCustomizations: Object.entries(selectedCustomizations).map(([groupId, optionIds]) => ({ groupId, optionIds })),
       });
 
       if (res.success) {
         setIsInCart(true);
         Alert.alert(
-          'Added to Cart',
-          'This custom masterpiece has been successfully added to your cart.',
+          isInCart ? 'Cart Updated' : 'Added to Cart',
+          'Your product choices and pricing have been saved to your cart.',
           [
             { text: 'Continue Shopping', style: 'cancel' },
             { text: 'View Cart', onPress: () => navigation.navigate('Cart') }
@@ -166,11 +173,24 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const handleBuyNow = () => {
     requireAuth(() => {
       if (!product) return;
+      const missingRequired = (product.customizationGroups || []).find(group => group.required && !(selectedCustomizations[group.id] || []).length);
+      if (missingRequired) {
+        Alert.alert('Choose an option', `Please choose an option for ${missingRequired.name}.`);
+        return;
+      }
       const directCheckoutItem = {
         id: 'direct_' + Date.now(),
         productId: product.id,
         quantity: quantity,
-        product: product
+        product: product,
+        selectedCustomizations: (product.customizationGroups || []).flatMap(group => {
+          const choices = (selectedCustomizations[group.id] || []).map(optionId => {
+            const option = group.options.find(candidate => candidate.id === optionId);
+            return option ? { optionId: option.id, name: option.name, price: Number(option.price) } : null;
+          }).filter(Boolean);
+          return choices.length ? [{ groupId: group.id, name: group.name, options: choices }] : [];
+        }),
+        unitPrice: Number(product.price) + (product.customizationGroups || []).reduce((sum, group) => sum + (selectedCustomizations[group.id] || []).reduce((groupSum, optionId) => groupSum + Number(group.options.find(option => option.id === optionId)?.price || 0), 0), 0),
       };
       navigation.navigate('Checkout', {
         cartItems: [directCheckoutItem],
@@ -263,6 +283,9 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const hasFreeDelivery = product.hasFreeShipping || activeOffers.some(
     offer => offer.isFreeShipping || offer.type === 'FREE_SHIPPING'
   );
+  const selectedCustomizationPrice = (product.customizationGroups || []).reduce((sum, group) =>
+    sum + (selectedCustomizations[group.id] || []).reduce((groupSum, optionId) =>
+      groupSum + Number(group.options.find(option => option.id === optionId)?.price || 0), 0), 0);
 
   // Horizontal card renderer (for category products)
   const renderHorizontalProduct = (item) => (
@@ -456,6 +479,42 @@ export default function ProductDetailsScreen({ route, navigation }) {
 
 
 
+          {(product.customizationGroups || []).length > 0 && (
+            <View style={{ marginTop: 20, padding: 16, borderRadius: 16, backgroundColor: theme.bg.card, borderWidth: 1, borderColor: theme.border }}>
+              <Text style={{ fontFamily: fonts.bold, color: theme.text.primary, fontSize: 15, marginBottom: 4 }}>Customize this item</Text>
+              <Text style={{ fontFamily: fonts.regular, color: theme.text.muted, fontSize: 12, marginBottom: 12 }}>Choose available options. Any extra price is shown beside the choice.</Text>
+              {product.customizationGroups.map(group => (
+                <View key={group.id} style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <Text style={{ fontFamily: fonts.bold, color: theme.text.primary, fontSize: 13 }}>{group.name}{group.required ? ' *' : ''}</Text>
+                  <Text style={{ fontFamily: fonts.regular, color: theme.text.muted, fontSize: 10, marginTop: 2 }}>{group.selectionType === 'MULTIPLE' ? 'Choose any that you want' : 'Choose one'}{group.required ? ' · Required' : ' · Optional'}</Text>
+                  {(group.options || []).map(option => {
+                    const chosen = (selectedCustomizations[group.id] || []).includes(option.id);
+                    return (
+                      <TouchableOpacity key={option.id} onPress={() => setSelectedCustomizations(current => {
+                        const selected = current[group.id] || [];
+                        const next = group.selectionType === 'SINGLE'
+                          ? (chosen ? [] : [option.id])
+                          : (chosen ? selected.filter(id => id !== option.id) : [...selected, option.id]);
+                        return { ...current, [group.id]: next };
+                      })} activeOpacity={0.75} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <View style={{ width: 20, height: 20, borderRadius: group.selectionType === 'SINGLE' ? 10 : 5, borderWidth: 1.5, borderColor: chosen ? theme.brand[500] : theme.border, backgroundColor: chosen ? theme.brand[500] : 'transparent', marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
+                            {chosen ? <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text> : null}
+                          </View>
+                          <Text style={{ fontFamily: fonts.medium, color: theme.text.primary, fontSize: 13, flex: 1 }}>{option.name}</Text>
+                        </View>
+                        <Text style={{ fontFamily: fonts.semiBold, color: Number(option.price) > 0 ? theme.brand[500] : theme.text.muted, fontSize: 12 }}>{Number(option.price) > 0 ? `+ ₹${Number(option.price).toLocaleString('en-IN')}` : 'Included'}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+              <Text style={{ marginTop: 10, textAlign: 'right', fontFamily: fonts.bold, color: theme.text.primary, fontSize: 13 }}>
+                Product total with selected options: ₹{(Number(product.price) + selectedCustomizationPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </Text>
+            </View>
+          )}
+
           {/* Description Section */}
           <View style={styles.descriptionSection}>
             <Text style={[styles.sectionLabel, { fontFamily: fonts.bold, color: theme.text.primary, marginBottom: 8 }]}>
@@ -505,7 +564,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
               <>
                 <ShoppingBag size={17} color={theme.brand[500]} style={{ marginRight: 7 }} />
                 <Text style={[styles.addToCartBtnText, { fontFamily: fonts.bold, color: theme.brand[500] }]}>
-                  {isInCart ? 'GO TO CART' : 'ADD TO CART'}
+                  {isInCart ? 'UPDATE CART' : 'ADD TO CART'}
                 </Text>
               </>
             )}

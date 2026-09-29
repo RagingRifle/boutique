@@ -4,6 +4,7 @@ import prisma from '../config/db.js';
 import { StockStatus } from '@prisma/client';
 import redis from '../config/redis.js';
 import { computeStockStatus } from './product.controller.js';
+import { customizationGroupsSchema } from '../utils/customizations.js';
 
 export const productCreateSchema = z.object({
   body: z.object({
@@ -16,6 +17,8 @@ export const productCreateSchema = z.object({
     categoryId: z.string().uuid(),
     inventoryQty: z.coerce.number().int().nonnegative().default(0),
     targetGender: z.enum(['MEN', 'WOMEN', 'KIDS', 'UNISEX']).default('UNISEX'),
+    inheritCategoryCustomizations: z.boolean().default(true),
+    customizationGroups: customizationGroupsSchema.default([]),
   }),
 });
 
@@ -30,6 +33,8 @@ export const productUpdateSchema = z.object({
     categoryId: z.string().uuid().optional(),
     inventoryQty: z.coerce.number().int().nonnegative().optional(),
     targetGender: z.enum(['MEN', 'WOMEN', 'KIDS', 'UNISEX']).optional(),
+    inheritCategoryCustomizations: z.boolean().optional(),
+    customizationGroups: customizationGroupsSchema.optional(),
   }),
 });
 
@@ -47,7 +52,7 @@ export class AdminProductController {
    * POST /admin/products
    */
   static async createProduct(req: Request, res: Response, next: NextFunction) {
-    const { name, description, price, materialInfo, images, bannerImage, categoryId, inventoryQty, targetGender } = req.body;
+    const { name, description, price, materialInfo, images, bannerImage, categoryId, inventoryQty, targetGender, inheritCategoryCustomizations, customizationGroups } = req.body;
 
     try {
       // Verify category exists
@@ -70,6 +75,8 @@ export class AdminProductController {
           inventoryQty,
           stockStatus,
           targetGender,
+          inheritCategoryCustomizations,
+          customizationGroups,
         },
       });
 
@@ -127,7 +134,7 @@ export class AdminProductController {
    */
   static async updateProduct(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
-    const { name, description, price, materialInfo, images, bannerImage, categoryId, inventoryQty, targetGender } = req.body;
+    const { name, description, price, materialInfo, images, bannerImage, categoryId, inventoryQty, targetGender, inheritCategoryCustomizations, customizationGroups } = req.body;
 
     try {
       const existingProduct = await prisma.product.findUnique({ where: { id } });
@@ -145,6 +152,8 @@ export class AdminProductController {
         categoryId,
         inventoryQty,
         targetGender,
+        inheritCategoryCustomizations,
+        customizationGroups,
       };
 
       // Recalculate stockStatus if inventoryQty is provided

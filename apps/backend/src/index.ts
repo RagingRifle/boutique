@@ -26,10 +26,12 @@ initSocket(server);
 initWorker();
 startAnalyticsFlushWorker();
 
-// 3. Automated Demo Data & Customer Accounts Verification
-import('./services/seedDemoData.js')
-  .then(m => m.seedDemoData())
-  .catch(err => logger.error('Demo data seed failed:', { metadata: { error: err.message } }));
+// 3. Optional demo data seeding; staging can disable this to keep imported catalog data clean.
+if (!env.SKIP_DEMO_SEED) {
+  import('./services/seedDemoData.js')
+    .then(m => m.seedDemoData())
+    .catch(err => logger.error('Demo data seed failed:', { metadata: { error: err.message } }));
+}
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {

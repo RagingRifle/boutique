@@ -79,6 +79,10 @@ export default function CartScreen({ navigation }) {
       const res = await api.post('/products/cart', {
         productId,
         quantity: newQty,
+        selectedCustomizations: (cartItems.find(item => item.productId === productId)?.selectedCustomizations || []).map(group => ({
+          groupId: group.groupId,
+          optionIds: (group.options || []).map(option => option.optionId),
+        })),
       });
       if (res.success) {
         setCartItems(prev => prev.map(item =>
@@ -147,7 +151,7 @@ export default function CartScreen({ navigation }) {
   };
 
   // Mathematical Calculations
-  const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.product.price) * item.quantity), 0);
+  const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.unitPrice ?? item.product.price) * item.quantity), 0);
   
   let discountVal = 0;
   if (appliedCoupon) {
@@ -250,11 +254,16 @@ export default function CartScreen({ navigation }) {
                   <Text style={[styles.itemSize, { fontFamily: fonts.medium, color: theme.text.muted }]}>
                     Size: L
                   </Text>
+                  {(item.selectedCustomizations || []).map(group => (
+                    <Text key={group.groupId} style={[styles.itemSize, { fontFamily: fonts.medium, color: theme.text.muted }]}>
+                      {group.name}: {(group.options || []).map(option => `${option.name}${Number(option.price) > 0 ? ` (+₹${Number(option.price).toLocaleString('en-IN')})` : ''}`).join(', ')}
+                    </Text>
+                  ))}
                   <View style={styles.priceRow}>
                     <View>
             <Text style={{ fontSize: 10, color: '#7A6B7A', marginBottom: 2 }}>Starts from</Text>
             <Text style={[styles.itemPrice, { fontFamily: fonts.bold, color: theme.text.primary }]}>
-                      ₹{Number(item.product.price).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      ₹{Number(item.unitPrice ?? item.product.price).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
           </View>
                     
