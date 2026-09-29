@@ -487,7 +487,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
                 <View key={group.id} style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border }}>
                   <Text style={{ fontFamily: fonts.bold, color: theme.text.primary, fontSize: 13 }}>{group.name}{group.required ? ' *' : ''}</Text>
                   <Text style={{ fontFamily: fonts.regular, color: theme.text.muted, fontSize: 10, marginTop: 2 }}>{group.selectionType === 'MULTIPLE' ? 'Choose any that you want' : 'Choose one'}{group.required ? ' · Required' : ' · Optional'}</Text>
-                  {(group.options || []).map(option => {
+                  {(Array.isArray(group.options) ? group.options : []).map(option => {
                     const chosen = (selectedCustomizations[group.id] || []).includes(option.id);
                     return (
                       <TouchableOpacity key={option.id} onPress={() => setSelectedCustomizations(current => {
@@ -507,6 +507,11 @@ export default function ProductDetailsScreen({ route, navigation }) {
                       </TouchableOpacity>
                     );
                   })}
+                  {(!Array.isArray(group.options) || group.options.length === 0) && (
+                    <Text style={{ color: '#B42318', fontFamily: fonts.medium, fontSize: 12, marginTop: 8 }}>
+                      No choices are configured for this group yet. Ask the admin to add choices and prices under Category CRUD.
+                    </Text>
+                  )}
                 </View>
               ))}
               <Text style={{ marginTop: 10, textAlign: 'right', fontFamily: fonts.bold, color: theme.text.primary, fontSize: 13 }}>

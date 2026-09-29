@@ -17,9 +17,33 @@ const products = [
 
 const blouseGroups: CustomizationGroup[] = [
   { id: 'demo-blouse-cut', name: 'Blouse cut', selectionType: 'SINGLE', required: true, options: [
+    { id: 'demo-normal-cut', name: 'Normal cut', price: 0 },
     { id: 'demo-princess-cut', name: 'Princess cut', price: 250 },
     { id: 'demo-katori-cut', name: 'Katori', price: 350 },
+    { id: 'demo-dart-cut', name: 'Dart', price: 150 },
     { id: 'demo-corset-cut', name: 'Corset style', price: 600 },
+  ] },
+  { id: 'demo-neck-shape', name: 'Neck shape', selectionType: 'SINGLE', required: false, options: [
+    { id: 'demo-neck-round', name: 'Round', price: 0 },
+    { id: 'demo-neck-v', name: 'V neck', price: 0 },
+    { id: 'demo-neck-square', name: 'Square', price: 100 },
+    { id: 'demo-neck-sweetheart', name: 'Sweetheart', price: 150 },
+  ] },
+  { id: 'demo-sleeve-pattern', name: 'Sleeve pattern', selectionType: 'SINGLE', required: false, options: [
+    { id: 'demo-sleeve-sleeveless', name: 'Sleeveless', price: 0 },
+    { id: 'demo-sleeve-short', name: 'Short sleeve', price: 0 },
+    { id: 'demo-sleeve-elbow', name: 'Elbow sleeve', price: 150 },
+    { id: 'demo-sleeve-full', name: 'Full sleeve', price: 250 },
+  ] },
+  { id: 'demo-blouse-pattern', name: 'Blouse pattern', selectionType: 'SINGLE', required: false, options: [
+    { id: 'demo-pattern-plain', name: 'Plain', price: 0 },
+    { id: 'demo-pattern-printed', name: 'Printed', price: 200 },
+    { id: 'demo-pattern-embroidered', name: 'Embroidered', price: 500 },
+  ] },
+  { id: 'demo-corset-pattern', name: 'Corset pattern', selectionType: 'SINGLE', required: false, options: [
+    { id: 'demo-corset-classic', name: 'Classic panels', price: 0 },
+    { id: 'demo-corset-laceup', name: 'Lace-up back', price: 250 },
+    { id: 'demo-corset-embroidered', name: 'Embroidered panels', price: 600 },
   ] },
   { id: 'demo-blouse-finishing', name: 'Finishing add-ons', selectionType: 'MULTIPLE', required: false, options: [
     { id: 'demo-piping', name: 'Piping', price: 150 },
