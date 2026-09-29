@@ -9,6 +9,7 @@
     "dev": "nodemon --watch src -e ts --exec ts-node src/index.ts",
     "reset:admin": "ts-node src/reset_admin.ts",
     "seed:clothing-categories": "node dist/seedClothingCategories.js",
+    "seed:demo-showcase": "node dist/seedDemoShowcase.js",
     "flush:cache": "node flush_cache.js",
     "db:indexes": "node create_indexes.js"
   },
