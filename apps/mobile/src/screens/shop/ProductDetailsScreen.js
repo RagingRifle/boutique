@@ -31,7 +31,7 @@ const { width } = Dimensions.get('window');
 export default function ProductDetailsScreen({ route, navigation }) {
   const { productId } = route.params;
   const { theme, fonts, shadows } = useTheme();
-  const { requireAuth } = useAuth();
+  const { user, requireAuth } = useAuth();
 
   // Data & Control States
   const [product, setProduct] = useState(null);
@@ -117,20 +117,23 @@ export default function ProductDetailsScreen({ route, navigation }) {
     loadProductDetails();
   }, [productId]);
 
-  const toggleFavorite = async () => {
-    requireAuth(async () => {
-      if (!product) return;
-    try {
-      if (isFav) {
-        await api.delete(`/products/favorites/${product.id}`);
-        setIsFav(false);
-      } else {
-        await api.post('/products/favorites', { productId: product.id });
-        setIsFav(true);
-      }
-      } catch (err) {
-        console.warn('Favorite toggle failed (likely session expired):', err.message);
-      }
+  const toggleFavorite = () => {
+    if (!user) {
+      Alert.alert('Login required', 'Please log in to add products to your wishlist.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log in', onPress: () => requireAuth() },
+      ]);
+      return;
+    }
+    if (!product) return;
+    const wasFavorite = isFav;
+    setIsFav(!wasFavorite);
+    const request = wasFavorite
+      ? api.delete(`/products/favorites/${product.id}`)
+      : api.post('/products/favorites', { productId: product.id });
+    request.catch(err => {
+      setIsFav(wasFavorite);
+      console.warn('Favorite toggle failed:', err.message);
     });
   };
 

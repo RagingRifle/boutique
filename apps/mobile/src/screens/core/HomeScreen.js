@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  KeyboardAvoidingView,
   TextInput,
   ImageBackground,
   Alert,
@@ -49,6 +50,7 @@ import {
   Phone
 } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { toggleWishlist } from '../../utils/toggleWishlist';
 import { CustomCartAddIcon, CustomCartAddedIcon } from '../../components/CartIcons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import BannerCarousel from '../../components/home/BannerCarousel';
@@ -81,7 +83,7 @@ const WhatsAppIcon = ({ size = 26, color = '#ffffff' }) => (
 
 export default function HomeScreen({ navigation }) {
   const { theme, fonts, shadows } = useTheme();
-  const { requireAuth } = useAuth();
+  const { user, requireAuth } = useAuth();
 
   // Data States
   const [userProfile, setUserProfile] = useState(null);
@@ -106,6 +108,7 @@ export default function HomeScreen({ navigation }) {
 
   // Consultation Slot Booking States
   const [showSlotBookingModal, setShowSlotBookingModal] = useState(false);
+  const slotBookingScrollRef = useRef(null);
   const [selectedConsultationType] = useState('Master Tailor Consultation');
   const [selectedBookingDateIndex, setSelectedBookingDateIndex] = useState(0);
   const [selectedBookingTime, setSelectedBookingTime] = useState('');
@@ -379,7 +382,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const getHeaderAddress = () => {
-    if (!userProfile) {
+    if (!user) {
       return 'Login to view address';
     }
     let addr = '';
@@ -395,10 +398,10 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleHeaderAddressPress = () => {
-    if (!userProfile) {
-      navigation.navigate('LoginIdentifier');
+    if (!user) {
+      requireAuth();
     } else {
-      setShowAddressModal(true);
+      navigation.navigate('Profile');
     }
   };
 
@@ -693,28 +696,9 @@ export default function HomeScreen({ navigation }) {
     return unsubscribe;
   }, [navigation]);
 
-  const toggleFavorite = useCallback(async (productId) => {
-    try {
-      const isFav = favorites.has(productId);
-      if (isFav) {
-        await api.delete(`/products/favorites/${productId}`);
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.delete(productId);
-          return next;
-        });
-      } else {
-        await api.post('/products/favorites', { productId });
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.add(productId);
-          return next;
-        });
-      }
-    } catch (err) {
-      console.error('Error toggling favorite:', err);
-    }
-  }, [favorites]);
+  const toggleFavorite = useCallback((productId) => {
+    toggleWishlist({ productId, favorites, setFavorites, user, requireAuth });
+  }, [favorites, user, requireAuth]);
 
   const handleAddToCart = useCallback(async (productId) => {
     try {
@@ -1324,6 +1308,10 @@ export default function HomeScreen({ navigation }) {
       visible={showSlotBookingModal}
       onRequestClose={() => setShowSlotBookingModal(false)}
     >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <View style={styles.addressModalOverlay}>
         <TouchableOpacity
           style={styles.addressModalCloseArea}
@@ -1347,7 +1335,13 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 30, gap: 18 }}>
+          <ScrollView
+            ref={slotBookingScrollRef}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 30, gap: 18 }}
+          >
             
             {/* Consultation Type Display (Single Service) */}
             <View style={{ gap: 8 }}>
@@ -1453,6 +1447,7 @@ export default function HomeScreen({ navigation }) {
                 value={bookingNotes}
                 onChangeText={setBookingNotes}
                 multiline
+                onFocus={() => setTimeout(() => slotBookingScrollRef.current?.scrollToEnd({ animated: true }), 300)}
               />
             </View>
 
@@ -1485,6 +1480,7 @@ export default function HomeScreen({ navigation }) {
           </ScrollView>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 

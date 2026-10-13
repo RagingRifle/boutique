@@ -19,6 +19,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../../styles/ThemeContext';
 import api from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { toggleWishlist } from '../../utils/toggleWishlist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Search,
@@ -68,6 +70,7 @@ const getRootCategoryOfNode = (nodes, id) => {
 
 export default function ProductsCatalogScreen({ navigation, route }) {
   const { theme, fonts, shadows } = useTheme();
+  const { user, requireAuth } = useAuth();
   
   // Data States
   const [products, setProducts] = useState([]);
@@ -523,28 +526,8 @@ export default function ProductsCatalogScreen({ navigation, route }) {
     }
   }, [selectedCategory, categories]);
 
-  const toggleFavorite = async (productId) => {
-    try {
-      const isFav = favorites.has(productId);
-      if (isFav) {
-        await api.delete(`/products/favorites/${productId}`);
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.delete(productId);
-          return next;
-        });
-      } else {
-        await api.post('/products/favorites', { productId });
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.add(productId);
-          return next;
-        });
-      }
-    } catch (err) {
-      console.error('Error toggling favorite:', err);
-    }
-  };
+  const toggleFavorite = (productId) =>
+    toggleWishlist({ productId, favorites, setFavorites, user, requireAuth });
 
   const handleAddToCart = async (productId) => {
     try {

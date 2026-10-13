@@ -173,12 +173,12 @@ export default function ProfileScreen({ navigation }) {
               </TouchableOpacity>
             </>
           ) : (
-            <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%'}}>
-              <View style={styles.profileLeft}>
+            <View style={styles.guestProfileRow}>
+              <View style={[styles.profileLeft, styles.guestProfileLeft]}>
                 <View style={[styles.profileImageContainer, { backgroundColor: theme.border }]}>
                   <User size={24} color="#64748b" />
                 </View>
-                <View style={styles.profileMeta}>
+                <View style={[styles.profileMeta, styles.guestProfileMeta]}>
                   <Text style={[styles.profileName, { fontFamily: fonts.bold, color: theme.text.primary }]}>
                     Welcome Guest
                   </Text>
@@ -188,7 +188,7 @@ export default function ProfileScreen({ navigation }) {
                 </View>
               </View>
               <TouchableOpacity 
-                style={[styles.editBtn, { borderColor: theme.brand[500], paddingHorizontal: 14, width: 'auto' }]} 
+                style={[styles.guestLoginBtn, { borderColor: theme.brand[500] }]}
                 onPress={() => requireAuth()}
               >
                 <Text style={{color: theme.brand[500], fontFamily: fonts.bold, fontSize: 13}}>Log In</Text>
@@ -350,6 +350,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
+  },
+  guestProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  guestProfileLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
+  guestProfileMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  guestLoginBtn: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    marginLeft: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   profileImageContainer: {
     width: 54,

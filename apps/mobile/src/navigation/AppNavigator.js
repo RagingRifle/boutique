@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../styles/ThemeContext';
 import { Platform, View, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Polygon } from 'react-native-svg';
 
 // Auth Screens
@@ -157,6 +158,7 @@ const CustomCartIcon = ({ color, size }) => (
 // Bottom Tab Navigation (Redesigned for the requested mockup design)
 function TabNavigator() {
   const { theme, fonts, shadows } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -167,8 +169,12 @@ function TabNavigator() {
         tabBarShowLabel: true,
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          height: Platform.OS === 'ios' ? 96 : 76,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+          height: Platform.OS === 'ios'
+            ? 96 + Math.max(0, insets.bottom - 28)
+            : 76 + insets.bottom,
+          paddingBottom: Platform.OS === 'ios'
+            ? Math.max(28, insets.bottom)
+            : 12 + insets.bottom,
           paddingTop: 10,
           borderTopWidth: 1,
           borderTopColor: '#E8D9E8',

@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../../styles/ThemeContext';
 import api from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { toggleWishlist } from '../../utils/toggleWishlist';
 import { Alert } from 'react-native';
 import { ArrowLeft, Sparkles, ShoppingBag, ShoppingCart, SlidersHorizontal } from 'lucide-react-native';
 
@@ -21,6 +23,7 @@ const { width } = Dimensions.get('window');
 
 export default function NewArrivalsScreen({ navigation }) {
   const { theme, fonts, shadows } = useTheme();
+  const { user, requireAuth } = useAuth();
   const [products, setProducts] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
 
@@ -58,28 +61,8 @@ export default function NewArrivalsScreen({ navigation }) {
     return unsubscribe;
   }, [navigation]);
 
-  const toggleFavorite = async (productId) => {
-    try {
-      const isFav = favorites.has(productId);
-      if (isFav) {
-        await api.delete(`/products/favorites/${productId}`);
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.delete(productId);
-          return next;
-        });
-      } else {
-        await api.post('/products/favorites', { productId });
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.add(productId);
-          return next;
-        });
-      }
-    } catch (err) {
-      console.error('Error toggling favorite:', err);
-    }
-  };
+  const toggleFavorite = (productId) =>
+    toggleWishlist({ productId, favorites, setFavorites, user, requireAuth });
 
   const renderProductItem = ({ item }) => {
     const isFav = favorites.has(item.id);
