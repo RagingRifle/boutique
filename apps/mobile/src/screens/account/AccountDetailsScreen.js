@@ -9,15 +9,18 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
   Modal,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LottieView from 'lottie-react-native';
 import { useTheme } from '../../styles/ThemeContext';
-import api from '../../utils/api';
+import api, { API_URL } from '../../utils/api';
 import {
   ChevronLeft,
   User,
@@ -49,6 +52,8 @@ export default function AccountDetailsScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [detectingLocation, setDetectingLocation] = useState(false);
 
   // Form States
   const [fullName, setFullName] = useState('');
@@ -229,6 +234,73 @@ export default function AccountDetailsScreen({ navigation }) {
     }
   };
 
+  const handleChooseAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo library access to choose a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    setUploadingAvatar(true);
+    try {
+      const asset = result.assets[0];
+      const extension = asset.uri.split('.').pop()?.split('?')[0] || 'jpg';
+      const formData = new FormData();
+      formData.append('image', {
+        uri: Platform.OS === 'ios' ? asset.uri.replace('file://', '') : asset.uri,
+        name: `profile_${Date.now()}.${extension}`,
+        type: `image/${extension === 'jpg' ? 'jpeg' : extension}`,
+      });
+      const token = await AsyncStorage.getItem('accessToken');
+      const upload = await axios.post(`${API_URL}/tickets/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` },
+      });
+      const avatarUrl = upload.data?.data?.url;
+      if (!avatarUrl) throw new Error('The uploaded image URL was missing.');
+      const saved = await api.put('/auth/profile', { avatarUrl });
+      if (!saved.success) throw new Error('Unable to save your profile picture.');
+      setProfile(current => ({ ...current, avatarUrl }));
+      await fetchProfile();
+    } catch (err) {
+      Alert.alert('Upload failed', err.message || 'Could not update your profile picture.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleDetectAddress = async () => {
+    setDetectingLocation(true);
+    try {
+      const Location = await import('expo-location');
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Location permission needed', 'You can enter your address manually, or allow location access to fill it automatically.');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const addresses = await Location.reverseGeocodeAsync(position.coords);
+      const detected = addresses?.[0];
+      if (!detected) throw new Error('Could not find an address for your current location.');
+      setStreetAddress([detected.streetNumber, detected.street].filter(Boolean).join(' ') || detected.name || '');
+      setLandmark(detected.district || detected.subregion || '');
+      setPincode(detected.postalCode || '');
+      setArea(detected.district || detected.subregion || detected.name || '');
+      setCity([detected.city, detected.region].filter(Boolean).join(', '));
+      setIsEditing(true);
+    } catch (err) {
+      Alert.alert('Location unavailable', err.message || 'Please enter your address manually.');
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
+
   // Password Verification
   const handleVerifyPassword = async () => {
     if (!password) {
@@ -375,7 +447,7 @@ export default function AccountDetailsScreen({ navigation }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: 'numeric', month: 'long', year: 'numeric',
+      day: 'numeric', month: 'short', year: 'numeric',
     });
   };
 
@@ -421,7 +493,7 @@ export default function AccountDetailsScreen({ navigation }) {
             <View style={[styles.iconBg, { backgroundColor: theme.brand[50] }]}>
               <Award size={20} color={theme.brand[500]} />
             </View>
-            <View>
+            <View style={styles.summaryText}>
               <Text style={[styles.summaryLabel, { fontFamily: fonts.medium, color: theme.text.secondary }]}>Loyalty Points</Text>
               <Text style={[styles.summaryValue, { fontFamily: fonts.bold, color: theme.brand[500] }]}>
                 {profile?.pointsBalance || 0} pts
@@ -433,9 +505,9 @@ export default function AccountDetailsScreen({ navigation }) {
             <View style={[styles.iconBg, { backgroundColor: theme.brand[50] }]}>
               <Calendar size={20} color={theme.brand[500]} />
             </View>
-            <View>
+            <View style={styles.summaryText}>
               <Text style={[styles.summaryLabel, { fontFamily: fonts.medium, color: theme.text.secondary }]}>Member Since</Text>
-              <Text style={[styles.summaryValue, { fontFamily: fonts.bold, color: theme.text.primary }]}>
+              <Text style={[styles.summaryValue, styles.memberSinceValue, { fontFamily: fonts.bold, color: theme.text.primary }]} numberOfLines={2}>
                 {formatDate(profile?.createdAt)}
               </Text>
             </View>
@@ -444,6 +516,14 @@ export default function AccountDetailsScreen({ navigation }) {
 
         {/* Personal Details Card */}
         <View style={[styles.formCard, shadows.premium, { backgroundColor: theme.bg.card }]}>
+          <View style={styles.avatarSection}>
+            <View style={styles.avatarFrame}>
+              {profile?.avatarUrl ? <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} /> : <User size={30} color={theme.text.muted} />}
+            </View>
+            <TouchableOpacity style={[styles.avatarButton, { backgroundColor: theme.brand[500] }]} onPress={handleChooseAvatar} disabled={uploadingAvatar}>
+              {uploadingAvatar ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.avatarButtonText, { fontFamily: fonts.semiBold }]}>Change profile photo</Text>}
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.sectionTitle, { fontFamily: fonts.bold, color: theme.text.primary }]}>
             Personal Details
           </Text>
@@ -487,6 +567,13 @@ export default function AccountDetailsScreen({ navigation }) {
           <Text style={[styles.sectionTitle, { fontFamily: fonts.bold, color: theme.text.primary, marginTop: 10 }]}>
             Shipping Address
           </Text>
+          <View style={styles.locationActions}>
+            <Text style={[styles.sectionSubtitle, { fontFamily: fonts.medium, color: theme.text.secondary, flex: 1 }]}>Enter your address or fill it from your current location.</Text>
+            <TouchableOpacity style={[styles.detectButton, { borderColor: theme.brand[500] }]} onPress={handleDetectAddress} disabled={detectingLocation}>
+              {detectingLocation ? <ActivityIndicator size="small" color={theme.brand[500]} /> : <MapPin size={15} color={theme.brand[500]} />}
+              <Text style={[styles.detectButtonText, { color: theme.brand[500], fontFamily: fonts.semiBold }]}>Detect</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* House No / Street Name */}
           <View style={styles.inputContainer}>
@@ -1034,17 +1121,27 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 50 },
   summaryCard: {
-    flexDirection: 'row', borderRadius: 24, padding: 18,
+    flexDirection: 'row', borderRadius: 24, padding: 14,
     marginBottom: 20, alignItems: 'center', justifyContent: 'space-between',
   },
-  summaryItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  summaryItem: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  summaryText: { flex: 1, minWidth: 0 },
   iconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   summaryLabel: { fontSize: 11 },
-  summaryValue: { fontSize: 13, marginTop: 2 },
-  summaryDivider: { width: 1, height: 32, backgroundColor: '#f0f0f2', marginHorizontal: 10 },
+  summaryValue: { fontSize: 12, marginTop: 2, flexShrink: 1 },
+  memberSinceValue: { lineHeight: 15, alignSelf: 'flex-start' },
+  summaryDivider: { width: 1, height: 32, backgroundColor: '#f0f0f2', marginHorizontal: 8 },
   formCard: { borderRadius: 24, padding: 20, marginBottom: 20, gap: 18 },
   sectionTitle: { fontSize: 15, marginBottom: 2 },
   sectionSubtitle: { fontSize: 12, lineHeight: 18, marginBottom: 4, marginTop: -6 },
+  avatarSection: { alignItems: 'center', gap: 10, marginBottom: 2 },
+  avatarFrame: { width: 84, height: 84, borderRadius: 42, overflow: 'hidden', backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarButton: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, minWidth: 150, alignItems: 'center' },
+  avatarButtonText: { color: '#fff', fontSize: 12 },
+  locationActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: -8 },
+  detectButton: { minHeight: 38, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  detectButtonText: { fontSize: 12 },
   inputContainer: { gap: 8 },
   inputLabel: { fontSize: 10.5, letterSpacing: 0.6 },
   inputWrapper: {

@@ -15,6 +15,7 @@ model User {
   passwordSetByUser    Boolean                 @default(false)
   fullName             String
   gender               String?
+  avatarUrl            String?
   address              String?
   role                 Role                    @default(CUSTOMER)
   createdAt            DateTime                @default(now())

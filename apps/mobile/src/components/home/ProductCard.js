@@ -94,10 +94,14 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   wishlistBtnBottom: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 32,
+    height: 32,
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
   },
   freeShippingBadge: {
     position: 'absolute',
@@ -115,18 +119,22 @@ const styles = StyleSheet.create({
   },
   productInfo: {
     padding: 12,
+    height: 112,
+    position: 'relative',
   },
   productName: {
     fontSize: 14,
+    lineHeight: 18,
+    height: 36,
     marginBottom: 6,
   },
   priceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   priceContainer: {
     flex: 1,
+    paddingRight: 36,
   },
   productPrice: {
     fontSize: 15,

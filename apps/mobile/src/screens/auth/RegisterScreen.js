@@ -77,11 +77,9 @@ export default function RegisterScreen({ route, navigation, onLoginSuccess }) {
     setLoading(true);
     setErrorMsg('');
     try {
-      // Send OTP to email/phone to verify ownership
-      // We pass both to the backend; backend prioritizes phoneNumber if provided
+      // Registration verifies the email address. Phone is collected for the profile only.
       const res = await api.post('/auth/otp/send', {
         email: trimmedEmail,
-        phoneNumber: trimmedPhone
       });
 
       if (res.success) {
@@ -107,11 +105,9 @@ export default function RegisterScreen({ route, navigation, onLoginSuccess }) {
     setLoading(true);
     setErrorMsg('');
     try {
-      // Use phoneNumber as identifier if available, matching the sendOtp logic
       const payload = {
         code: otpCode,
         purpose: 'register',
-        phoneNumber: phoneNumber.trim(),
         email: email.trim().toLowerCase()
       };
 
@@ -191,7 +187,6 @@ export default function RegisterScreen({ route, navigation, onLoginSuccess }) {
     try {
       const res = await api.post('/auth/otp/send', {
         email: email.trim().toLowerCase(),
-        phoneNumber: phoneNumber.trim()
       });
       if (res.success) {
         setTimer(60);
@@ -319,10 +314,10 @@ export default function RegisterScreen({ route, navigation, onLoginSuccess }) {
         Verify Identity (2/3)
       </Text>
       <Text style={[styles.cardHeaderSub, { fontFamily: fonts.regular }]}>
-        An 6-digit verification code has been dispatched to:
+        A 6-digit verification code has been sent to your email:
       </Text>
       <Text style={[styles.targetDisplay, { fontFamily: fonts.bold, color: theme.brand[500] }]}>
-        {phoneNumber || email}
+        {email}
       </Text>
 
       {/* Digit Input */}
@@ -435,6 +430,7 @@ export default function RegisterScreen({ route, navigation, onLoginSuccess }) {
               key={g.value}
               style={[
                 styles.genderOption,
+                g.value === 'OTHER' && styles.genderOptionWide,
                 { borderColor: theme.border },
                 gender === g.value && { backgroundColor: theme.brand[50], borderColor: theme.brand[500] }
               ]}
@@ -739,6 +735,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 2,
+    flexWrap: 'wrap',
   },
   genderOption: {
     flex: 1,
@@ -748,6 +745,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f8fafc',
+  },
+  genderOptionWide: {
+    flexBasis: '100%',
   },
   genderOptionText: {
     fontSize: 13,

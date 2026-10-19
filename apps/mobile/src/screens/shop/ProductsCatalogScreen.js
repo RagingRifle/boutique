@@ -1565,25 +1565,33 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   wishlistBtnBottom: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 32,
+    height: 32,
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
   },
   productInfo: {
     padding: 10,
     gap: 4,
+    height: 104,
+    position: 'relative',
   },
   productName: {
     fontSize: 13,
+    lineHeight: 17,
+    height: 34,
   },
   priceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   priceContainer: {
     flex: 1,
+    paddingRight: 36,
   },
   productPrice: {
     fontSize: 13,

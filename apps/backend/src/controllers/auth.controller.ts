@@ -120,6 +120,7 @@ export const updateProfileSchema = z.object({
   body: z.object({
     fullName: z.string().min(1).optional(),
     gender: z.string().optional().nullable(),
+    avatarUrl: z.string().url().optional().nullable(),
     address: z.string().optional().nullable(),
     fcmToken: z.string().optional().nullable(),
   }),
@@ -658,14 +659,12 @@ export class AuthController {
             </div>
           </div>
         `;
-        EmailService.sendEmail(
+        await EmailService.sendEmail(
           email, 
           'Your MARCOS Verification Code', 
           `Your MARCOS OTP is: ${code}`,
           emailHtml
-        ).catch(err => {
-          logger.error('Failed to send Email OTP in background', { metadata: { error: err.message } });
-        });
+        );
       }
 
       // Set 60-second request cooldown on success
@@ -1037,6 +1036,7 @@ export class AuthController {
             phoneNumber: true,
             fullName: true,
             gender: true,
+            avatarUrl: true,
             address: true,
             fcmToken: true,
             role: true,
@@ -1092,7 +1092,7 @@ export class AuthController {
   static async updateProfile(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.id;
-      const { fullName, gender, address, fcmToken } = req.body;
+      const { fullName, gender, avatarUrl, address, fcmToken } = req.body;
 
       // Update user details
       const user = await prisma.user.update({
@@ -1100,6 +1100,7 @@ export class AuthController {
         data: {
           fullName,
           gender,
+          avatarUrl,
           address,
           fcmToken,
         },
@@ -1109,6 +1110,7 @@ export class AuthController {
           phoneNumber: true,
           fullName: true,
           gender: true,
+          avatarUrl: true,
           address: true,
           fcmToken: true,
           role: true,
@@ -1126,7 +1128,7 @@ export class AuthController {
         ipAddress: req.ip,
         details: {
           message: 'User profile updated',
-          updatedFields: { fullName, gender, address, fcmToken },
+          updatedFields: { fullName, gender, avatarUrl, address, fcmToken },
         },
       });
 
