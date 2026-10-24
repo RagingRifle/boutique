@@ -1581,42 +1581,39 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
     setPendingStatusChange(null);
   };
 
-  const todayISOStr = new Date().toISOString().substring(0, 10);
-  const activeDateScope = dateFrom || todayISOStr;
-  const scopeDayStart = new Date(activeDateScope + 'T00:00:00.000Z').getTime();
-  const scopeDayEnd = scopeDayStart + 86400000;
+  const getLocalDayBounds = (date) => {
+    if (!date) return null;
+    const start = new Date(`${date}T00:00:00`).getTime();
+    return { start, end: start + 86400000 };
+  };
+  const createdDayBounds = getLocalDayBounds(dateFrom);
+  const deliveryDayBounds = getLocalDayBounds(dateFrom);
+  const isInDay = (value, bounds) => {
+    if (!value || !bounds) return false;
+    const time = new Date(value).getTime();
+    return time >= bounds.start && time < bounds.end;
+  };
+  const matchesDateWindow = (value) => {
+    if (!value && (dateFrom || dateTo)) return false;
+    const time = value ? new Date(value).getTime() : 0;
+    const start = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
+    const end = dateTo ? new Date(`${dateTo}T00:00:00`).getTime() + 86400000 : Infinity;
+    return time >= start && time < end;
+  };
 
   const sameDayCounts = useMemo(() => {
-    let ordersReceived = 0;
-    let toBeDelivered = 0;
-    let delivered = 0;
-
-    orders.forEach(o => {
-      if (o.isQuickOrder) return;
-      const createdTime = new Date(o.createdAt).getTime();
-      const inCreatedScope = createdTime >= scopeDayStart && createdTime < scopeDayEnd;
-      if (inCreatedScope && o.status !== 'CANCELLED') {
-        ordersReceived++;
-      }
-
-      if (o.deliveryDate) {
-        const delivTime = new Date(o.deliveryDate).getTime();
-        const inDelivScope = delivTime >= scopeDayStart && delivTime < scopeDayEnd;
-        if (inDelivScope) {
-          if (['PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'OUT_FOR_DELIVERY'].includes(o.status)) {
-            toBeDelivered++;
-          }
-          if (o.status === 'DELIVERED') {
-            delivered++;
-          }
-        }
-      } else if (o.status === 'DELIVERED' && inCreatedScope) {
-        delivered++;
-      }
-    });
-
-    return { ordersReceived, toBeDelivered, delivered, total: orders.filter(o => !o.isQuickOrder).length };
-  }, [orders, scopeDayStart, scopeDayEnd]);
+    const productOrders = orders.filter(o => !o.isQuickOrder);
+    const inSelectedRange = (order, basis) => {
+      const value = basis === 'delivery' ? (order.deliveryDate || (order.status === 'DELIVERED' ? order.updatedAt || order.createdAt : null)) : order.createdAt;
+      return matchesDateWindow(value);
+    };
+    return {
+      ordersReceived: productOrders.filter(o => o.status !== 'CANCELLED' && inSelectedRange(o, 'created')).length,
+      toBeDelivered: productOrders.filter(o => ['PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'OUT_FOR_DELIVERY'].includes(o.status) && inSelectedRange(o, 'delivery')).length,
+      delivered: productOrders.filter(o => o.status === 'DELIVERED' && inSelectedRange(o, 'delivery')).length,
+      total: productOrders.length,
+    };
+  }, [orders, dateFrom, dateTo, createdDayBounds, deliveryDayBounds]);
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch =
@@ -1628,22 +1625,15 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
     
     // Same-day detailed stage quick filter
     if (deliveryStageQuickFilter === 'ORDERS_RECEIVED') {
-      const orderCreatedTime = new Date(order.createdAt).getTime();
-      const inDay = orderCreatedTime >= scopeDayStart && orderCreatedTime < scopeDayEnd;
+      const inDay = matchesDateWindow(order.createdAt);
       if (!inDay || order.status === 'CANCELLED') return false;
     } else if (deliveryStageQuickFilter === 'TO_BE_DELIVERED') {
-      if (!order.deliveryDate) return false;
-      const delivTime = new Date(order.deliveryDate).getTime();
-      const inDay = delivTime >= scopeDayStart && delivTime < scopeDayEnd;
+      const inDay = matchesDateWindow(order.deliveryDate);
       const isPendingDelivery = ['PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'OUT_FOR_DELIVERY'].includes(order.status);
       if (!inDay || !isPendingDelivery) return false;
     } else if (deliveryStageQuickFilter === 'DELIVERED') {
       if (order.status !== 'DELIVERED') return false;
-      if (dateFrom) {
-        const delivTime = order.deliveryDate ? new Date(order.deliveryDate).getTime() : new Date(order.updatedAt || order.createdAt).getTime();
-        const inDay = delivTime >= scopeDayStart && delivTime < scopeDayEnd;
-        if (!inDay) return false;
-      }
+      if (!matchesDateWindow(order.deliveryDate || order.updatedAt || order.createdAt)) return false;
     }
 
     let matchesDateFrom = true;
@@ -2588,12 +2578,6 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                 onClick={() => {
                   setDeliveryStageQuickFilter('ORDERS_RECEIVED');
                   setStatusFilter('ALL');
-                  if (!dateFrom) {
-                    const today = new Date().toISOString().substring(0, 10);
-                    setDateFrom(today);
-                    setDateTo(today);
-                    setDateFilterType('ORDER_DATE');
-                  }
                 }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
                   deliveryStageQuickFilter === 'ORDERS_RECEIVED'
@@ -2612,12 +2596,6 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                 onClick={() => {
                   setDeliveryStageQuickFilter('TO_BE_DELIVERED');
                   setStatusFilter('ALL');
-                  if (!dateFrom) {
-                    const today = new Date().toISOString().substring(0, 10);
-                    setDateFrom(today);
-                    setDateTo(today);
-                    setDateFilterType('DELIVERY_DATE');
-                  }
                 }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
                   deliveryStageQuickFilter === 'TO_BE_DELIVERED'
@@ -2636,11 +2614,6 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                 onClick={() => {
                   setDeliveryStageQuickFilter('DELIVERED');
                   setStatusFilter('ALL');
-                  if (!dateFrom) {
-                    const today = new Date().toISOString().substring(0, 10);
-                    setDateFrom(today);
-                    setDateTo(today);
-                  }
                 }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
                   deliveryStageQuickFilter === 'DELIVERED'

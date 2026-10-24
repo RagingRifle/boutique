@@ -16,6 +16,7 @@ export const appointmentCreateSchema = z.object({
     userId: z.string().uuid().optional(),
     adminOverride: z.boolean().optional(),
     staffId: z.string().uuid().optional(),
+    orderId: z.string().uuid().optional().nullable(),
   }),
 });
 
@@ -189,7 +190,7 @@ export class AppointmentController {
    */
   static async createAppointment(req: Request, res: Response, next: NextFunction) {
     const user = req.user!;
-    const { date, timeSlot, productType, type, notes, userId, adminOverride, staffId } = req.body;
+    const { date, timeSlot, productType, type, notes, userId, adminOverride, staffId, orderId } = req.body;
 
     const appointmentDate = new Date(date);
     const lockKey = `lock:appointment:${appointmentDate.toISOString()}:${timeSlot}`;
@@ -203,6 +204,13 @@ export class AppointmentController {
       let targetUserId = user.id;
       if (user.role !== Role.CUSTOMER) {
         targetUserId = userId || null;
+      }
+
+      if (orderId) {
+        const linkedOrder = await prisma.order.findUnique({ where: { id: orderId }, select: { userId: true } });
+        if (!linkedOrder || linkedOrder.userId !== targetUserId) {
+          return res.status(400).json({ success: false, message: 'The order cannot be linked to this customer booking.' });
+        }
       }
 
       if (!bypassLimits) {
@@ -274,6 +282,7 @@ export class AppointmentController {
           productType,
           type: type as AppointmentType,
           notes,
+          orderId,
           assignedStaffId: staffId,
         },
         include: { user: { select: { fullName: true, email: true } }, assignedStaff: { select: { fullName: true } } },

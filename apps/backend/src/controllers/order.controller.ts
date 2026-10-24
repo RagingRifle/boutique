@@ -51,6 +51,15 @@ export const orderCheckoutSchema = z.object({
   }),
 });
 
+export const orderCustomizationsUpdateSchema = z.object({
+  body: z.object({
+    items: z.array(z.object({
+      orderItemId: z.string().uuid(),
+      selectedCustomizations: selectedCustomizationsSchema.default([]),
+    })).min(1),
+  }),
+});
+
 async function invalidateUserOrdersCache(userId: string) {
   try {
     let cursor = '0';
@@ -264,6 +273,97 @@ export class OrderController {
    * GET /admin/orders (Admin / Staff Only)
    * Admin: list all orders globally
    */
+  static async adminUpdateOrderCustomizations(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    const { items } = req.body;
+    try {
+      const updatedOrder = await prisma.$transaction(async (tx: any) => {
+        const existing = await tx.order.findUnique({
+          where: { id },
+          include: { orderItems: { include: { product: true } } },
+        });
+        if (!existing) throw new Error('Order not found.');
+        if (items.length !== existing.orderItems.length || items.some((entry: any) => !existing.orderItems.some((item: any) => item.id === entry.orderItemId))) {
+          throw new Error('The submitted items do not match this order. Refresh and try again.');
+        }
+
+        const repricedItems = [] as any[];
+        for (const orderItem of existing.orderItems) {
+          const submitted = items.find((entry: any) => entry.orderItemId === orderItem.id);
+          const groups = await getEffectiveCustomizationGroups(tx, orderItem.product);
+          const resolved = resolveSelectedCustomizations(groups, submitted.selectedCustomizations || []);
+          const oldAddonTotal = (((orderItem.selectedCustomizations as any[]) || []).reduce((sum, group) =>
+            sum + (group.options || []).reduce((optionSum: number, option: any) => optionSum + Number(option.price || 0), 0), 0));
+          const historicalBasePrice = Math.max(0, Number(orderItem.price) - oldAddonTotal);
+          const updatedItem = await tx.orderItem.update({
+            where: { id: orderItem.id },
+            data: {
+              price: historicalBasePrice + resolved.priceAdjustment,
+              selectedCustomizations: resolved.selectedCustomizations as any,
+            },
+          });
+          repricedItems.push(updatedItem);
+        }
+
+        const subtotal = repricedItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+        let discount = Number(existing.discountAmount || 0);
+        if (existing.couponCode) {
+          const coupon = await tx.coupon.findUnique({ where: { code: existing.couponCode } });
+          if (coupon) {
+            if (Number(coupon.discountPercent) > 0) {
+              discount = subtotal * Number(coupon.discountPercent) / 100;
+              if (coupon.maxDiscount && discount > Number(coupon.maxDiscount)) discount = Number(coupon.maxDiscount);
+            } else {
+              discount = Number(coupon.discountFlat || 0);
+            }
+          }
+        }
+        discount = Math.min(Math.max(0, discount), subtotal);
+        const taxRate = Number(existing.gstPercentage || 0) / 100;
+        const tax = Number(((subtotal - discount) * taxRate).toFixed(2));
+        const deliveryCharge = Math.max(0, Number(existing.payableAmount) - (Number(existing.totalAmount) - Number(existing.discountAmount) + Number(existing.taxAmount)));
+        const payable = Number((subtotal - discount + tax + deliveryCharge).toFixed(2));
+        const advance = Number(existing.advancePayment || 0);
+        const paymentHistoryTotal = ((existing.paymentHistory as any[]) || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        const balance = Math.max(0, payable - advance - paymentHistoryTotal);
+        const recalculatedPaymentStatus = balance === 0 && payable > 0
+          ? 'COMPLETED'
+          : (advance + paymentHistoryTotal > 0 ? 'PARTIAL' : 'PENDING');
+        return tx.order.update({
+          where: { id },
+          data: {
+            totalAmount: subtotal,
+            discountAmount: discount,
+            taxAmount: tax,
+            payableAmount: payable,
+            balanceAmount: balance,
+            paymentStatus: existing.paymentStatus === 'REFUNDED' || existing.paymentStatus === 'FAILED'
+              ? existing.paymentStatus
+              : recalculatedPaymentStatus,
+          },
+          include: { orderItems: { include: { product: { select: { name: true } } } }, user: { select: { fullName: true, email: true, phoneNumber: true } } },
+        });
+      });
+
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'cache:admin:orders:*', 'COUNT', '100');
+        cursor = nextCursor;
+        if (keys.length) await redis.del(...keys);
+      } while (cursor !== '0');
+      if (updatedOrder.userId) await invalidateUserOrdersCache(updatedOrder.userId);
+      const guestDetails = updatedOrder.gatewayResponse as any;
+      await JobsProducer.queueInvoicePdf(
+        updatedOrder.id,
+        updatedOrder.user?.email || guestDetails?.guestCustomerEmail,
+        updatedOrder.user?.fullName || guestDetails?.guestCustomerName,
+      );
+      return res.status(200).json({ success: true, data: updatedOrder });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async adminListOrders(req: Request, res: Response, next: NextFunction) {
     const { page = 1, limit = 10, status } = req.query as any;
     const skip = (Number(page) - 1) * Number(limit);
@@ -878,6 +978,7 @@ export class OrderController {
             taxAmount,
             gstPercentage: 18,
             discountAmount,
+            couponCode: couponCode?.toUpperCase() || null,
             payableAmount,
             paymentMethod,
             isOfflineSales: false,

@@ -1,8 +1,6 @@
 
 // API Configuration
-const BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:5000/api/v1'
-  : (import.meta.env.VITE_API_URL || 'https://marcos-backend-live.onrender.com/api/v1');
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://50.6.44.247:5100/api/v1';
 
 class APIClient {
   constructor() {
@@ -245,6 +243,11 @@ class APIClient {
     const res = await this.request('/products?limit=1000');
     return res.data;
 
+  }
+
+  async getProductById(id) {
+    const res = await this.request(`/products/${id}`);
+    return res.data;
   }
 
   async createProduct(product) {
@@ -935,9 +938,11 @@ class APIClient {
       userId: order.userId || order.user?.id,
       items: (order.orderItems || []).map(item => ({
         id: item.id,
+        productId: item.productId,
         productName: item.product?.name || 'Unknown Item',
         quantity: item.quantity,
         price: Number(item.price),
+        selectedCustomizations: item.selectedCustomizations || [],
       })),
       // booking is already attached by the backend (getAssociatedBooking), pass it through
       booking: order.booking || null,
@@ -984,6 +989,14 @@ class APIClient {
     });
     return res.data;
 
+  }
+
+  async updateOrderCustomizations(id, items) {
+    const res = await this.request(`/orders/admin/${id}/customizations`, {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+    });
+    return res.data;
   }
 
   async getPackingSlip(orderId) {

@@ -537,6 +537,7 @@ export default function CheckoutScreen({ route, navigation }) {
             productType: cartItems.map(item => item.product.name).join(', '),
             type: 'CONSULTATION',
             notes: `Order Invoice: ${orderData.invoiceNumber}. Notes: ${bookingNotes}`,
+            orderId: orderData.id,
           }).catch(err => console.error("Failed standard booking creation:", err));
         } else {
           // POST /visits

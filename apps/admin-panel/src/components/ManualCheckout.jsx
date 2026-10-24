@@ -76,6 +76,8 @@ export default function ManualCheckout() {
   const [staffMembers, setStaffMembers] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
   const [checkoutApptId, setCheckoutApptId] = useState(null);
+  const [linkedOrder, setLinkedOrder] = useState(null);
+  const [linkedCoupon, setLinkedCoupon] = useState(null);
 
   const runPrefill = () => {
     const query = new URLSearchParams(window.location.search);
@@ -90,6 +92,8 @@ export default function ManualCheckout() {
     setOrderStatus('PENDING');
     setPaymentStatus('PENDING');
     // Reset cart + customer so stale data doesn't persist across re-triggers
+    setLinkedOrder(null);
+    setLinkedCoupon(null);
     setCart([]);
     setSelectedCustomer(null);
     setCustomerSearchTerm('');
@@ -97,6 +101,46 @@ export default function ManualCheckout() {
     sessionStorage.removeItem('checkout_user_id');
     sessionStorage.removeItem('checkout_product_name');
     sessionStorage.removeItem('checkout_delivery_date');
+
+    // Mobile checkout already creates the order before booking a fitting. Reuse
+    // that order so its selected add-ons and coupon discount are not lost.
+    Promise.all([api.getAppointments(1, 1000), api.getOrders(1, 1000), api.getCoupons().catch(() => [])])
+      .then(async ([appointments, orders, coupons]) => {
+        const appointment = appointments.find(item => item.id === apptId);
+        const invoiceMatch = appointment?.notes?.match(/Order Invoice:\s*([^\.]+)/i)?.[1]?.trim();
+        const existing = orders.find(order => order.id === appointment?.orderId || (invoiceMatch && order.invoiceNumber === invoiceMatch));
+        if (!existing) return;
+        setLinkedOrder(existing);
+        setLinkedCoupon(coupons.find(coupon => coupon.code?.toUpperCase() === existing.couponCode?.toUpperCase()) || null);
+        setSearchTerm('');
+        setPrefillProductToCart('');
+        setOrderStatus(existing.status || 'PENDING');
+        setPaymentStatus(existing.paymentStatus || 'PENDING');
+        setGstPercentage(String(existing.gstPercentage ?? '18'));
+        setPaymentMethod((existing.paymentMethod || 'CASH').toLowerCase() === 'card' ? 'Card' : (existing.paymentMethod || 'Cash').toLowerCase() === 'online' ? 'Online' : 'Cash');
+        setAdvancePayment(String(Number(existing.advancePayment || 0)));
+        setDeliveryDate(existing.deliveryDate ? new Date(existing.deliveryDate).toISOString().slice(0, 10) : '');
+        setSelectedCustomer(existing.user || (existing.userId ? { id: existing.userId, fullName: existing.customerName, email: existing.customerEmail, phoneNumber: existing.customerPhone } : null));
+        setCustomerSearchTerm(existing.customerName || '');
+        const existingItems = await Promise.all((existing.items || []).map(async item => {
+          const selectedCustomizations = item.selectedCustomizations || [];
+          const addonsTotal = selectedCustomizations.reduce((sum, group) => sum + (group.options || []).reduce((optionSum, option) => optionSum + Number(option.price || 0), 0), 0);
+          const product = await api.getProductById(item.productId || item.id).catch(() => null);
+          return {
+            orderItemId: item.id,
+            productId: item.productId || item.id,
+            productName: item.productName,
+            basePrice: Math.max(0, Number(item.price) - addonsTotal),
+            price: Number(item.price),
+            quantity: item.quantity,
+            maxStock: item.quantity,
+            selectedCustomizations,
+            customizationGroups: product?.customizationGroups || [],
+          };
+        }));
+        setCart(existingItems);
+      })
+      .catch(err => console.error('Unable to load linked customer order:', err));
 
     if (userId) {
       api.getCustomerDetails(userId).then(res => {
@@ -393,6 +437,30 @@ export default function ManualCheckout() {
     ));
   };
 
+  const getItemUnitPrice = item => item.customPrice !== undefined && item.customPrice !== ''
+    ? Number(item.customPrice)
+    : Number(item.basePrice ?? item.price) + (item.selectedCustomizations || []).reduce((sum, group) =>
+      sum + (group.options || []).reduce((optionSum, option) => optionSum + Number(option.price || 0), 0), 0);
+
+  const handleCustomizationChange = (productId, group, option, checked) => {
+    setCart(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+      const current = item.selectedCustomizations.find(selection => selection.groupId === group.id);
+      const currentIds = (current?.options || []).map(selected => selected.optionId);
+      const nextIds = group.selectionType === 'SINGLE'
+        ? (checked ? [option.id] : currentIds.filter(id => id !== option.id))
+        : (checked ? [...new Set([...currentIds, option.id])] : currentIds.filter(id => id !== option.id));
+      const nextOptions = group.options.filter(candidate => nextIds.includes(candidate.id)).map(candidate => ({
+        optionId: candidate.id,
+        name: candidate.name,
+        price: Number(candidate.price || 0),
+      }));
+      const selectedCustomizations = item.selectedCustomizations.filter(selection => selection.groupId !== group.id);
+      if (nextOptions.length) selectedCustomizations.push({ groupId: group.id, name: group.name, options: nextOptions });
+      return { ...item, selectedCustomizations, customPrice: undefined };
+    }));
+  };
+
   const handleRemoveFromCart = (productId) => {
     setCart(prev => prev.filter(i => i.productId !== productId));
   };
@@ -432,28 +500,32 @@ export default function ManualCheckout() {
   };
 
   const calculateTotals = () => {
-    const subtotal = cart.reduce((sum, item) => {
-      const activePrice = item.customPrice !== undefined && item.customPrice !== '' ? Number(item.customPrice) : item.price;
-      return sum + (activePrice * item.quantity);
-    }, 0);
+    const subtotal = cart.reduce((sum, item) => sum + getItemUnitPrice(item) * item.quantity, 0);
     let discount = 0;
 
-    if (appliedCoupon) {
-      if (appliedCoupon.discountPercent > 0) {
-        discount = (subtotal * appliedCoupon.discountPercent) / 100;
-        if (appliedCoupon.maxDiscount && discount > appliedCoupon.maxDiscount) {
-          discount = appliedCoupon.maxDiscount;
+    const couponForTotals = linkedOrder ? linkedCoupon : appliedCoupon;
+    if (couponForTotals) {
+      if (couponForTotals.discountPercent > 0) {
+        discount = (subtotal * couponForTotals.discountPercent) / 100;
+        if (couponForTotals.maxDiscount && discount > couponForTotals.maxDiscount) {
+          discount = Number(couponForTotals.maxDiscount);
         }
-      } else if (appliedCoupon.discountFlat > 0) {
-        discount = appliedCoupon.discountFlat;
+      } else if (couponForTotals.discountFlat > 0) {
+        discount = Number(couponForTotals.discountFlat);
       }
+    } else if (linkedOrder) {
+      discount = Number(linkedOrder.discountAmount || 0);
     }
+    discount = Math.min(Math.max(0, discount), subtotal);
 
     const parsedGst = (gstPercentage === '' || isNaN(Number(gstPercentage))) ? 0 : Number(gstPercentage);
     const taxRate = parsedGst / 100;
     const taxableAmount = Math.max(0, subtotal - discount);
     const tax = Number((taxableAmount * taxRate).toFixed(2));
-    const total = Number((taxableAmount + tax).toFixed(2));
+    const originalDeliveryCharge = linkedOrder
+      ? Math.max(0, Number(linkedOrder.payableAmount) - (Number(linkedOrder.totalAmount) - Number(linkedOrder.discountAmount) + Number(linkedOrder.taxAmount)))
+      : 0;
+    const total = Number((taxableAmount + tax + originalDeliveryCharge).toFixed(2));
     const advance = Number(advancePayment) || 0;
     const balance = Math.max(0, total - advance);
 
@@ -485,6 +557,34 @@ export default function ManualCheckout() {
 
     try {
       setIsSubmitting(true);
+
+      if (linkedOrder) {
+        const repricedOrder = await api.updateOrderCustomizations(linkedOrder.id, cart.map(item => ({
+          orderItemId: item.orderItemId,
+          selectedCustomizations: (item.selectedCustomizations || []).map(group => ({
+            groupId: group.groupId,
+            optionIds: (group.options || []).map(option => option.optionId),
+          })),
+        })));
+        const updatedOrder = await api.updateOrderDetails(linkedOrder.id, {
+          status: orderStatus,
+          paymentStatus,
+          advancePayment: Number(advancePayment) || Number(linkedOrder.advancePayment) || 0,
+          deliveryDate: deliveryDate || linkedOrder.deliveryDate,
+        });
+        if (checkoutApptId) {
+          await api.updateAppointment(checkoutApptId, { orderId: linkedOrder.id, status: 'ORDERED' });
+        }
+        const completionItems = (repricedOrder.orderItems || []).map(item => ({
+          ...item,
+          productName: item.product?.name || cart.find(cartItem => cartItem.orderItemId === item.id)?.productName || 'Product',
+        }));
+        setLinkedOrder({ ...linkedOrder, ...repricedOrder, ...updatedOrder, items: completionItems });
+        setCompletedOrder({ ...linkedOrder, ...repricedOrder, ...updatedOrder, items: completionItems, booking: linkedOrder.booking });
+        setCheckoutApptId(null);
+        setIsSubmitting(false);
+        return;
+      }
 
       const rawSearch = customerSearchTerm.trim();
       const isEmailInput = rawSearch.includes('@');
@@ -561,7 +661,9 @@ export default function ManualCheckout() {
     }
   };
 
-  const { subtotal, discount, tax, total, advance, balance } = calculateTotals();
+  const calculatedTotals = calculateTotals();
+  const { subtotal, discount, tax, total, advance } = calculatedTotals;
+  const balance = Math.max(0, total - advance);
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -806,16 +908,19 @@ export default function ManualCheckout() {
             )}
           </div>
 
-          <div className="space-y-2 max-h-44 overflow-y-auto border-t border-b border-slate-100 py-3">
+          <div className="space-y-2 max-h-72 overflow-y-auto border-t border-b border-slate-100 py-3">
             {cart.length === 0 ? (
               <p className="text-xs text-center text-slate-400 py-6">Your shopping cart is empty</p>
             ) : (
               cart.map((item) => (
-                <div key={item.productId} className="flex justify-between items-center text-xs">
+                <React.Fragment key={item.productId}>
+                <div className="flex justify-between items-center text-xs">
                   <div className="flex-1 min-w-0 pr-2">
                     <p className="font-bold text-slate-800 truncate">{item.productName}</p>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <div className="relative group flex items-center">
+                      {linkedOrder ? (
+                        <span className="text-[11px] font-bold text-slate-700">₹{getItemUnitPrice(item).toFixed(2)}</span>
+                      ) : <div className="relative group flex items-center">
                         <span className="absolute left-2 text-[11px] font-bold text-slate-400 group-focus-within:text-brand-500 transition-colors">₹</span>
                         <input
                           type="number"
@@ -826,13 +931,13 @@ export default function ManualCheckout() {
                           className="w-20 pl-5 pr-2 py-1 text-[11px] font-bold text-slate-800 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-brand-300 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all cursor-text"
                           title="Edit Unit Price"
                         />
-                      </div>
+                      </div>}
                       <span className="text-[11px] font-medium text-slate-400">x {item.quantity}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2.5 shrink-0">
-                    <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
+                    {!linkedOrder && <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
                       <button
                         onClick={() => handleUpdateQty(item.productId, -1)}
                         className="p-1 hover:bg-slate-100 text-slate-500 rounded-l-lg"
@@ -846,20 +951,63 @@ export default function ManualCheckout() {
                       >
                         <Plus className="w-3 h-3" />
                       </button>
-                    </div>
-                    <button
+                    </div>}
+                    {!linkedOrder && <button
                       onClick={() => handleRemoveFromCart(item.productId)}
                       className="text-slate-400 hover:text-red-500"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </button>}
                   </div>
                 </div>
+                {item.selectedCustomizations?.length > 0 && (
+                  <div className="mt-2 text-[10px] text-slate-500">
+                    {item.selectedCustomizations.map(group => (
+                      <div key={group.groupId || group.id}>
+                        <span className="font-bold">{group.groupName || group.name}: </span>
+                        {(group.options || []).map(option => option.name).join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {linkedOrder && item.customizationGroups?.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3">
+                    {item.customizationGroups.map(group => {
+                      const selectedIds = item.selectedCustomizations.find(selection => selection.groupId === group.id)?.options.map(option => option.optionId) || [];
+                      return (
+                        <fieldset key={group.id}>
+                          <legend className="mb-1 text-[10px] font-bold text-slate-600">
+                            {group.name}{group.required ? ' · Required' : ''}{group.selectionType === 'SINGLE' ? ' · Choose one' : ''}
+                          </legend>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                            {group.options.map(option => (
+                              <label key={option.id} className="inline-flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer">
+                                <input
+                                  type={group.selectionType === 'SINGLE' ? 'radio' : 'checkbox'}
+                                  name={`${item.productId}-${group.id}`}
+                                  checked={selectedIds.includes(option.id)}
+                                  onChange={event => handleCustomizationChange(item.productId, group, option, event.target.checked)}
+                                />
+                                {option.name}{Number(option.price) > 0 ? ` (+₹${Number(option.price).toFixed(2)})` : ''}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                      );
+                    })}
+                  </div>
+                )}
+                </React.Fragment>
               ))
             )}
           </div>
 
-          <div className="space-y-2">
+          {linkedOrder ? (
+            <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+              Existing customer order {linkedOrder.invoiceNumber} loaded. Add-on edits and the coupon discount are saved when you complete checkout.
+              {linkedOrder.couponCode && <span className="block mt-1">Coupon {linkedOrder.couponCode} applied.</span>}
+            </div>
+          ) : <div className="space-y-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase block">Promo Coupon</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -886,7 +1034,7 @@ export default function ManualCheckout() {
                 Coupon code {appliedCoupon.code} applied (-{appliedCoupon.discountPercent > 0 ? `${appliedCoupon.discountPercent}%` : `₹${appliedCoupon.discountFlat}`})
               </p>
             )}
-          </div>
+          </div>}
 
           <div className="space-y-1.5">
             <span className="text-[10px] font-bold text-slate-400 uppercase block">Payment Method</span>
@@ -1050,7 +1198,8 @@ export default function ManualCheckout() {
                   type="number" 
                   value={gstPercentage} 
                   onChange={e => setGstPercentage(e.target.value)} 
-                  className="w-10 text-center text-xs font-semibold bg-slate-50 border border-slate-200 rounded py-0.5" 
+                  disabled={Boolean(linkedOrder)}
+                  className="w-10 text-center text-xs font-semibold bg-slate-50 border border-slate-200 rounded py-0.5 disabled:opacity-60"
                   placeholder="0"
                 />
                 %)

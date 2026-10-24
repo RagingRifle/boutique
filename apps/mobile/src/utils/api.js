@@ -6,15 +6,15 @@ import Constants from 'expo-constants';
 // Central configuration for API endpoints.
 // Auto-detects local host IP from Expo Constants when running in local development mode
 // so that testing on physical mobile devices connects successfully to the server.
-// Toggle to true to connect Expo Go / Dev directly to live Render cloud backend
+// Use the VPS for both Expo Go and production builds.
 const USE_CLOUD_BACKEND = true;
-const CLOUD_BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'https://marcos-backend-live.onrender.com/api/v1';
+const VPS_BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'http://50.6.44.247:5100/api/v1';
 
 const getApiUrl = () => {
   // Always use the live cloud backend if USE_CLOUD_BACKEND is enabled or if in production build
   if (USE_CLOUD_BACKEND || (typeof __DEV__ !== 'undefined' && !__DEV__)) {
-    console.log('[API] Using live cloud server:', CLOUD_BACKEND_URL);
-    return CLOUD_BACKEND_URL;
+    console.log('[API] Using VPS backend:', VPS_BACKEND_URL);
+    return VPS_BACKEND_URL;
   }
 
   // 1. Web Platform (Browser)

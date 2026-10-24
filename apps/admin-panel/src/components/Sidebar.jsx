@@ -66,18 +66,16 @@ export default function Sidebar({
         p => p.stockStatus === 'LOW_STOCK' || p.stockStatus === 'OUT_OF_STOCK' || p.inventoryQty <= 10
       ).length;
 
-      // Count pending/processing orders (exclude quick orders)
-      const normalPendingOrdersCount = (orders || []).filter(
-        o => !o.isQuickOrder && (o.status === 'PENDING' || o.status === 'PROCESSING')
-      ).length;
+      // Match the unfiltered totals shown in Product Bookings and Studio Fittings.
+      const productBookingsCount = (orders || []).filter(o => !o.isQuickOrder).length;
+      const studioFittingsCount = (appointments || []).length;
 
       // Count quick orders
       const quickOrdersCount = (orders || []).filter(
         o => o.isQuickOrder && (!o.quickOrderStatus || o.quickOrderStatus === 'PENDING')
       ).length;
 
-      // Count pending appointments + active/assigned visits
-      const pendingAppts = (appointments || []).filter(a => a.status === 'PENDING').length;
+      // Count active/assigned visits
       const activeVisits = (visits || []).filter(v => v.status === 'PENDING' || v.status === 'ASSIGNED').length;
 
       // Count open/in-progress support tickets
@@ -87,12 +85,12 @@ export default function Sidebar({
 
       setCounts({
         products: lowStockCount,
-        orders: normalPendingOrdersCount + quickOrdersCount + pendingAppts + activeVisits,
-        'orders-bookings': normalPendingOrdersCount,
-        'orders-fittings': pendingAppts,
+        orders: productBookingsCount + studioFittingsCount + activeVisits + quickOrdersCount,
+        'orders-bookings': productBookingsCount,
+        'orders-fittings': studioFittingsCount,
         'orders-visits': activeVisits,
         'orders-quick': quickOrdersCount,
-        'bookings': pendingAppts + activeVisits,
+        'bookings': studioFittingsCount + activeVisits,
         support: pendingSupport
       });
     } catch (err) {

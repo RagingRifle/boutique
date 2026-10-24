@@ -12,7 +12,7 @@ import BroadcastAlertListener from './src/components/BroadcastAlertListener';
 import AppAlertsOverlay from './src/components/AppAlertsOverlay';
 
 const linking = {
-  prefixes: ['marcos://', 'https://marcos.app', 'https://marcos-backend-live.onrender.com'],
+  prefixes: ['marcos://', 'https://marcos.app'],
   config: {
     screens: {
       MainApp: {

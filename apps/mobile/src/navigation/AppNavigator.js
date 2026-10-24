@@ -1,5 +1,5 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../styles/ThemeContext';
 import { Platform, View, Text } from 'react-native';
@@ -68,7 +68,7 @@ import {
 
 import { useAuth } from '../contexts/AuthContext';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Auth Stack Navigation
