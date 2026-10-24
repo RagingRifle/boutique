@@ -1,0 +1,15 @@
+{"_e":"root:init","_t":1792685793406,"format":"v0-jsonl","version":"57.0.22"}
+{"_e":"env:mode","_t":1792685793427,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1792685793451,"mode":"development","files":[],"env":{}}
+{"_e":"devserver:start","_t":1792685798831,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1792685808408,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1792685812867,"plugins":[]}
+{"_e":"metro:instantiate","_t":1792685829336,"atlas":false,"workers":6,"host":"::","port":8081}
+{"_e":"root:init","_t":1792685885010,"format":"v0-jsonl","version":"57.0.22"}
+{"_e":"env:mode","_t":1792685885012,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1792685885015,"mode":"development","files":[],"env":{}}
+{"_e":"devserver:start","_t":1792685885284,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1792685885701,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:server_log","_t":1792685885836,"level":"error","data":["An unknown error occurred while installing React Native DevTools. Details:\n\nspawn EPERM"]}
+{"_e":"expo:dev-tools-plugin:load","_t":1792685885883,"plugins":[]}
+{"_e":"metro:instantiate","_t":1792685897141,"atlas":false,"workers":6,"host":"::","port":8081}

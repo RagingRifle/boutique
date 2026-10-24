@@ -11,7 +11,13 @@
     "staging": {
       "extends": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://187.127.190.2:5100/api/v1"
+        "EXPO_PUBLIC_API_URL": "http://50.6.44.247:5100/api/v1"
+      }
+    },
+    "ios-simulator": {
+      "extends": "staging",
+      "ios": {
+        "simulator": true
       }
     },
     "preview-local": {
