@@ -602,7 +602,11 @@ export default function ManualCheckout() {
         items: cart.map(i => ({ 
           productId: i.productId, 
           quantity: i.quantity, 
-          customPrice: i.customPrice !== undefined && i.customPrice !== '' ? Number(i.customPrice) : undefined 
+          customPrice: i.customPrice !== undefined && i.customPrice !== '' ? Number(i.customPrice) : undefined,
+          selectedCustomizations: (i.selectedCustomizations || []).map(group => ({
+            groupId: group.groupId,
+            optionIds: (group.options || []).map(option => option.optionId),
+          })),
         })),
         paymentMethod,
         couponCode: appliedCoupon?.code,
@@ -1345,7 +1349,14 @@ export default function ManualCheckout() {
                   <tbody className="divide-y divide-slate-100">
                     {completedOrder.items.map((item) => (
                       <tr key={item.id}>
-                        <td className="py-2.5 px-3 font-bold text-slate-800">{item.productName}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-800">
+                          {item.productName}
+                          {item.selectedCustomizations?.flatMap(group => (group.options || []).map(option => (
+                            <div key={`${group.groupId}-${option.optionId}`} className="mt-1 text-[10px] leading-4 font-medium text-slate-500">
+                              Add-on: {group.name}: {option.name}{Number(option.price) > 0 ? ` (+₹${Number(option.price).toFixed(2)} each)` : ''}
+                            </div>
+                          )))}
+                        </td>
                         <td className="py-2.5 px-3 text-center font-bold text-slate-500">{item.quantity}</td>
                         <td className="py-2.5 px-3 text-right text-slate-600">₹{item.price}</td>
                         <td className="py-2.5 px-3 text-right font-extrabold text-slate-800">

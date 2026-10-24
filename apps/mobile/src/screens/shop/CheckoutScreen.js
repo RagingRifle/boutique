@@ -1212,8 +1212,15 @@ export default function CheckoutScreen({ route, navigation }) {
           <View style={[styles.successDetailsCard, shadows.premium, { backgroundColor: theme.bg.card }]}>
             <View style={styles.successDetailRow}>
               <Text style={[styles.successDetailLabel, { fontFamily: fonts.bold, color: theme.text.secondary }]}>Order ID</Text>
-              <Text style={[styles.successDetailValue, { fontFamily: fonts.bold, color: theme.text.primary }]}>
+              <Text style={[styles.successDetailValue, styles.successOrderId, { fontFamily: fonts.bold, color: theme.text.primary }]}>
                 {placedOrder.invoiceNumber || 'N/A'}
+              </Text>
+            </View>
+
+            <View style={styles.successDetailRow}>
+              <Text style={[styles.successDetailLabel, { fontFamily: fonts.bold, color: theme.text.secondary }]}>Order Date</Text>
+              <Text style={[styles.successDetailValue, { fontFamily: fonts.bold, color: theme.text.primary }]}>
+                {placedOrder.createdAt ? new Date(placedOrder.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
               </Text>
             </View>
 
@@ -1227,7 +1234,7 @@ export default function CheckoutScreen({ route, navigation }) {
             <View style={styles.successDetailRow}>
               <Text style={[styles.successDetailLabel, { fontFamily: fonts.bold, color: theme.text.secondary }]}>Fitting Schedule</Text>
               <Text style={[styles.successDetailValue, { fontFamily: fonts.bold, color: theme.brand[500] }]}>
-                {bookingDate} | {bookingSlot}
+                {bookingDate ? formatBookingDate(bookingDate) : 'Not scheduled'}{bookingSlot ? ` · ${bookingSlot}` : ''}
               </Text>
             </View>
 
@@ -1823,14 +1830,23 @@ const styles = StyleSheet.create({
   },
   successDetailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 10,
   },
   successDetailLabel: {
     fontSize: 13.5,
+    width: 112,
+    flexShrink: 0,
   },
   successDetailValue: {
     fontSize: 14,
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  successOrderId: {
+    fontSize: 11.5,
   },
   successDividerLine: {
     height: 1,

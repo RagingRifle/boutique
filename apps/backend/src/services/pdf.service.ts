@@ -63,13 +63,26 @@ export class PdfService {
         
         const items = order.orderItems || [];
         items.forEach((item: any) => {
+          const addonLines = (item.selectedCustomizations || []).flatMap((group: any) =>
+            (group.options || []).map((option: any) => `${group.name}: ${option.name}${Number(option.price) > 0 ? ` (+INR ${Number(option.price).toFixed(2)} each)` : ''}`)
+          );
+          doc.fontSize(10);
+          const productNameHeight = doc.heightOfString(item.product.name, { width: 220 });
+          const addonText = addonLines.length ? `Add-ons / selected options:\n${addonLines.join('\n')}` : '';
+          doc.fontSize(8);
+          const addonHeight = addonText ? doc.heightOfString(addonText, { width: 220 }) + 4 : 0;
+          const rowHeight = Math.max(25, productNameHeight + addonHeight + 12);
+          if (currentY + rowHeight > 680) {
+            doc.addPage();
+            currentY = 50;
+          }
           doc.fillColor('#4B5563')
-            .text(item.product.name, 60, currentY + 5)
+            .fontSize(10).text(item.product.name, 60, currentY + 5, { width: 220 })
             .text(item.quantity.toString(), 300, currentY + 5, { width: 30, align: 'right' })
             .text(`INR ${Number(item.price).toFixed(2)}`, 380, currentY + 5, { width: 60, align: 'right' })
             .text(`INR ${(Number(item.price) * item.quantity).toFixed(2)}`, 480, currentY + 5, { width: 60, align: 'right' });
-
-          currentY += 25;
+          if (addonText) doc.fontSize(8).fillColor('#6B7280').text(addonText, 60, currentY + 7 + productNameHeight, { width: 220, lineGap: 1 });
+          currentY += rowHeight;
           doc.strokeColor('#F3F4F6').lineWidth(0.5).moveTo(50, currentY).lineTo(550, currentY).stroke();
         });
 

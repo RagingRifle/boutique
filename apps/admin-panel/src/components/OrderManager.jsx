@@ -822,9 +822,9 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       const totalAmount = unitPrice * qty;
       const fabricInfo = item.fabricType || item.product?.materialInfo || order.fabricType;
       const customizationText = (item.selectedCustomizations || [])
-        .map(group => `${group.name}: ${(group.options || []).map(option => option.name).join(', ')}`)
+        .flatMap(group => (group.options || []).map(option => `${group.name}: ${option.name}${Number(option.price) > 0 ? ` (+₹${Number(option.price).toLocaleString('en-IN')} each)` : ''}`))
         .join(' · ');
-      const detailsStr = `${fabricInfo ? `<div style="font-size: 10px; color: #666; font-weight: normal; margin-top: 2px;">Fabric / Material: ${fabricInfo}</div>` : ''}${customizationText ? `<div style="font-size: 10px; color: #555; font-weight: normal; margin-top: 2px;">Customer choices: ${customizationText}</div>` : ''}`;
+      const detailsStr = `${fabricInfo ? `<div style="font-size: 10px; color: #666; font-weight: normal; margin-top: 2px;">Fabric / Material: ${fabricInfo}</div>` : ''}${customizationText ? `<div style="font-size: 10px; color: #334155; font-weight: normal; margin-top: 4px;"><strong>Add-ons / selected options (per item):</strong> ${customizationText}</div>` : ''}`;
 
       return `
         <tr>

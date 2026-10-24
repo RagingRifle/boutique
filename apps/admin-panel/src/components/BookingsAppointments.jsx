@@ -1319,19 +1319,20 @@ function StatsBar({ items, type }) {
   const stats = getStatsConfig();
 
   return (
-    <div className="flex flex-col sm:flex-row bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden w-full">
-      {/* Total Section */}
-      <div className="bg-slate-50 px-6 py-4 flex flex-col justify-center items-center sm:items-start border-b sm:border-b-0 sm:border-r border-slate-200 min-w-[140px]">
-        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1">Total {type === 'fittings' ? 'Fittings' : 'Visits'}</span>
-        <span className="text-3xl font-black text-slate-800 leading-none">{total}</span>
+    <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <span className="min-w-0 break-words text-[10px] font-bold uppercase tracking-widest text-slate-400">Total {type === 'fittings' ? 'Fittings' : 'Visits'}</span>
+        <span className="shrink-0 text-3xl font-black leading-none text-slate-800">{total}</span>
       </div>
 
-      {/* Breakdown Section */}
-      <div className="flex-1 p-3 flex flex-wrap gap-2 items-center">
+      <div
+        className="grid min-w-0 gap-2 p-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))' }}
+      >
         {stats.map(s => (
-          <div key={s.l} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold ${s.cl} flex-1 min-w-[100px] justify-between transition-all hover:scale-[1.02]`}>
-            <span className="text-[10px] uppercase tracking-wide opacity-80">{s.l}</span>
-            <span className="text-lg leading-none font-extrabold">{s.v}</span>
+          <div key={s.l} className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${s.cl}`}>
+            <span className="min-w-0 break-words text-[10px] uppercase tracking-wide opacity-80">{s.l}</span>
+            <span className="shrink-0 text-lg font-extrabold leading-none">{s.v}</span>
           </div>
         ))}
       </div>
@@ -1946,7 +1947,7 @@ export default function BookingsAppointments({ setActiveTab, isActive }) {
         </div>
 
         {!loading && (
-          <div className="flex-1 w-full xl:w-auto">
+          <div className="min-w-0 flex-1 w-full xl:w-auto">
             <StatsBar items={section === 'fittings' ? todayAppts : section === 'orders' ? todayOrders : todayVisits} type={section} />
           </div>
         )}

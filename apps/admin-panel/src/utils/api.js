@@ -864,7 +864,14 @@ class APIClient {
       return {
         productId: item.productId,
         quantity: item.quantity,
-        price: item.customPrice !== undefined ? Number(item.customPrice) : Number(prod.price),
+        price: item.customPrice !== undefined
+          ? Number(item.customPrice)
+          : Number(prod.price) + (item.selectedCustomizations || []).reduce((sum, group) =>
+            sum + (group.options || []).reduce((optionSum, option) => optionSum + Number(option.price || 0), 0), 0),
+        selectedCustomizations: (item.selectedCustomizations || []).map(group => ({
+          groupId: group.groupId,
+          optionIds: (group.options || []).map(option => option.optionId),
+        })),
       };
     });
 
@@ -915,13 +922,14 @@ class APIClient {
     return {
       ...res.data,
       customerName: sale.customerName,
-      items: sale.items.map(item => {
+      items: sale.items.map((item, index) => {
         const prod = products.find(p => p.id === item.productId);
         return {
           id: item.productId,
           productName: prod ? prod.name : 'Unknown Item',
           quantity: item.quantity,
-          price: prod ? Number(prod.price) : 0,
+          price: invoiceItems[index]?.price || 0,
+          selectedCustomizations: item.selectedCustomizations || [],
         };
       }),
     };

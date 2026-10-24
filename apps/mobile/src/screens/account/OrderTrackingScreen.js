@@ -56,6 +56,10 @@ const STEPS = [
 
 const STATUS_ORDER = ['PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 
+const formatCustomizationDetails = (groups = []) => (Array.isArray(groups) ? groups : []).flatMap(group =>
+  (group.options || []).map(option => `${group.name}: ${option.name}${Number(option.price) > 0 ? ` (+₹${Number(option.price).toLocaleString('en-IN')} each)` : ''}`)
+);
+
 function getStepIndex(status) {
   const idx = STATUS_ORDER.indexOf(status);
   return idx === -1 ? 0 : idx;
@@ -706,6 +710,11 @@ export default function OrderTrackingScreen({ route, navigation }) {
             <Text style={[styles.itemQty, { fontFamily: fonts.regular, color: theme.text.secondary }]}>
               Qty: {item.quantity}
             </Text>
+            {formatCustomizationDetails(item.selectedCustomizations).map((detail, optionIndex) => (
+              <Text key={`${item.id}-addon-${optionIndex}`} style={{ fontSize: 11, lineHeight: 16, marginTop: 2, fontFamily: fonts.medium, color: theme.text.secondary }}>
+                Add-on: {detail}
+              </Text>
+            ))}
           </View>
           <Text style={[styles.itemPrice, { fontFamily: fonts.bold, color: theme.text.primary }]}>
             ₹{(Number(item.price) * item.quantity).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -1632,16 +1641,22 @@ export default function OrderTrackingScreen({ route, navigation }) {
                 const price = Number(item.price || (order.payableAmount / qty));
                 const lineTotal = price * qty;
                 const fabricInfo = item.fabricType || item.product?.materialInfo || order.fabricType;
+                const addonDetails = formatCustomizationDetails(item.selectedCustomizations);
 
                 return (
-                  <View key={idx} style={{ flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', alignItems: 'center' }}>
-                    <View style={{ flex: 2, paddingRight: 8 }}>
+                  <View key={idx} style={{ flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 2, minWidth: 0, paddingRight: 8 }}>
                       <Text style={{ fontSize: 13, fontFamily: fonts.semiBold, color: '#0f172a' }}>{name}</Text>
                       {fabricInfo && (
                         <Text style={{ fontSize: 11, fontFamily: fonts.regular, color: '#64748b', marginTop: 1 }}>
                           Fabric: {fabricInfo}
                         </Text>
                       )}
+                      {addonDetails.map((detail, optionIndex) => (
+                        <Text key={`${idx}-invoice-addon-${optionIndex}`} style={{ fontSize: 10.5, lineHeight: 15, fontFamily: fonts.medium, color: '#475569', marginTop: 3 }}>
+                          Add-on: {detail}
+                        </Text>
+                      ))}
                     </View>
                     <Text style={{ width: 35, fontSize: 12, fontFamily: fonts.regular, color: '#334155', textAlign: 'center' }}>{qty}</Text>
                     <Text style={{ width: 70, fontSize: 12, fontFamily: fonts.regular, color: '#475569', textAlign: 'right' }}>₹{price.toLocaleString('en-IN')}</Text>

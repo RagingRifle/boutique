@@ -9,6 +9,7 @@ import { getIO } from '../socket/socket.handler.js';
 import crypto from 'crypto';
 import { createAuditLog } from '../utils/audit.js';
 import redis from '../config/redis.js';
+import { getEffectiveCustomizationGroups, resolveSelectedCustomizations, selectedCustomizationsSchema } from '../utils/customizations.js';
 
 export const invoiceCreateSchema = z.object({
   body: z.object({
@@ -20,6 +21,7 @@ export const invoiceCreateSchema = z.object({
       productId: z.string().uuid(),
       quantity: z.coerce.number().int().min(1),
       price: z.coerce.number().positive(),
+      selectedCustomizations: selectedCustomizationsSchema.default([]),
     })).min(1),
     discountAmount: z.coerce.number().nonnegative().default(0),
     paymentMethod: z.enum(['CASH', 'CARD', 'ONLINE']),
@@ -74,7 +76,15 @@ export class BillingController {
         });
         const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
-        for (const item of items) {
+        const normalizedItems = await Promise.all(items.map(async (item: any) => {
+          const product = productMap.get(item.productId);
+          if (!product) throw new Error(`Product ${item.productId} not found`);
+          const groups = await getEffectiveCustomizationGroups(tx, product);
+          const resolved = resolveSelectedCustomizations(groups, item.selectedCustomizations || []);
+          return { ...item, selectedCustomizations: resolved.selectedCustomizations };
+        }));
+
+        for (const item of normalizedItems) {
           const product = productMap.get(item.productId);
           if (!product) {
             throw new Error(`Product ${item.productId} not found`);
@@ -156,10 +166,11 @@ export class BillingController {
             measurementProfileIds: measurementProfileIds && measurementProfileIds.length > 0 ? measurementProfileIds : undefined,
             deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
             orderItems: {
-              create: items.map((item: any) => ({
+              create: normalizedItems.map((item: any) => ({
                 productId: item.productId,
                 quantity: item.quantity,
                 price: item.price,
+                selectedCustomizations: item.selectedCustomizations,
               })),
             },
           },
