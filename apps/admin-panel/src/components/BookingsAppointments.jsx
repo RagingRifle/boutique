@@ -293,6 +293,29 @@ function MeasurementGrid({ meas, editing, onChange }) {
   );
 }
 
+function CustomMeasurementsEditor({ rows = [], editing, onChange }) {
+  const update = (index, key, value) => onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [key]: value } : row));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Custom Measurements</p>
+        {editing && <button type="button" onClick={() => onChange([...rows, { name: '', value: '', unit: 'in' }])} className="text-[10px] font-bold text-brand-600 flex items-center gap-1"><Plus className="w-3 h-3" />Add custom</button>}
+      </div>
+      {rows.length === 0 && <p className="text-[11px] text-slate-400">No custom measurements added.</p>}
+      {rows.map((row, index) => (
+        <div key={`${index}-${row.name}`} className="grid grid-cols-[1fr_0.7fr_0.45fr_auto] gap-2 items-center">
+          {editing ? <>
+            <input value={row.name || ''} onChange={e => update(index, 'name', e.target.value)} placeholder="Name (e.g. Armhole)" className="min-w-0 text-xs border border-slate-200 rounded-lg px-2 py-2" />
+            <input value={row.value || ''} onChange={e => update(index, 'value', e.target.value)} placeholder="Value" className="min-w-0 text-xs border border-slate-200 rounded-lg px-2 py-2" />
+            <input value={row.unit || ''} onChange={e => update(index, 'unit', e.target.value)} placeholder="in" className="min-w-0 text-xs border border-slate-200 rounded-lg px-2 py-2" />
+            <button type="button" onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))} aria-label="Remove custom measurement" className="p-1.5 text-slate-400 hover:text-red-500"><X className="w-3.5 h-3.5" /></button>
+          </> : <div className="col-span-4 flex justify-between rounded-lg bg-white border border-slate-100 px-3 py-2 text-xs"><span className="font-semibold text-slate-700">{row.name}</span><span className="text-slate-500">{row.value} {row.unit}</span></div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Full Detail Drawer (right-side slide-over) ───────────────────────────────
 function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setActiveTab }) {
   const isAppt = !!appt;
@@ -303,11 +326,14 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
   const [measurements, setMeasurements] = useState([]);
   const [activeMeasId, setActiveMeasId] = useState('');
   const [measEdit, setMeasEdit] = useState(EMPTY_MEAS());
+  const [customMeasEdit, setCustomMeasEdit] = useState([]);
   const [measEditing, setMeasEditing] = useState(false);
   const [measSaving, setMeasSaving] = useState(false);
   const [linkedOrders, setLinkedOrders] = useState([]);
   const [customerHistoryOrders, setCustomerHistoryOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderAssignments, setOrderAssignments] = useState({});
+  const [showMeasurementGate, setShowMeasurementGate] = useState(false);
 
   // Editable fields
   const [orderStatus, setOrderStatus] = useState('');
@@ -332,6 +358,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
         setActiveMeasId(data[0].id);
         const p = data[0];
         setMeasEdit(Object.fromEntries(MEAS_FIELDS.map(f => [f.key, p[f.key] || ''])));
+        setCustomMeasEdit(Array.isArray(p.customMeasurements) ? p.customMeasurements : []);
       }
     }).catch(() => { });
   }, [userId]);
@@ -353,6 +380,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
     if (linked.length > 0) {
       const o = linked[0];
       setSelectedOrder(o);
+      setOrderAssignments(Object.fromEntries((o.items || []).map(orderItem => [orderItem.id, orderItem.measurementProfileId || o.measurementProfileId || ''])));
       setOrderStatus(o.status || '');
       setPayStatus(o.paymentStatus || '');
       setFabricType(o.fabricType || '');
@@ -361,6 +389,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
     } else if (customerOrders.length > 0) {
       const o = customerOrders.find(x => x.id === selectedOrder?.id) || customerOrders[0];
       setSelectedOrder(o);
+      setOrderAssignments(Object.fromEntries((o.items || []).map(orderItem => [orderItem.id, orderItem.measurementProfileId || o.measurementProfileId || ''])));
       setOrderStatus(o.status || '');
       setPayStatus(o.paymentStatus || '');
       setFabricType(o.fabricType || '');
@@ -368,6 +397,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
       setTailorNotes(o.tailorNotes || '');
     } else {
       setSelectedOrder(null);
+      setOrderAssignments({});
     }
   }, [orders, userId, item.orderId]);
 
@@ -375,6 +405,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
     setActiveMeasId(id);
     const p = measurements.find(m => m.id === id);
     if (p) setMeasEdit(Object.fromEntries(MEAS_FIELDS.map(f => [f.key, p[f.key] || ''])));
+    if (p) setCustomMeasEdit(Array.isArray(p.customMeasurements) ? p.customMeasurements : []);
     setMeasEditing(false);
   };
 
@@ -382,8 +413,9 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
     if (!activeMeasId) return;
     setMeasSaving(true);
     try {
-      await api.updateMeasurements(activeMeasId, measEdit);
-      const updated = measurements.map(m => m.id === activeMeasId ? { ...m, ...measEdit } : m);
+      const customMeasurements = customMeasEdit.filter(row => row.name?.trim() && String(row.value || '').trim());
+      await api.updateMeasurements(activeMeasId, { ...measEdit, customMeasurements });
+      const updated = measurements.map(m => m.id === activeMeasId ? { ...m, ...measEdit, customMeasurements } : m);
       setMeasurements(updated);
       setMeasEditing(false);
     } catch (e) { alert(e.message); }
@@ -394,38 +426,73 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
     if (!newProfileName.trim() || !userId) return;
     setCreatingProfile(true);
     try {
-      const created = await api.createMeasurementProfile({ userId, profileName: newProfileName.trim(), ...measEdit });
+      const customMeasurements = customMeasEdit.filter(row => row.name?.trim() && String(row.value || '').trim());
+      const created = await api.createMeasurementProfile({ userId, profileName: newProfileName.trim(), ...measEdit, customMeasurements });
       const updated = [...measurements, created];
       setMeasurements(updated);
       setActiveMeasId(created.id);
       setNewProfileName('');
       setShowNewProfile(false);
+      setCustomMeasEdit([]);
     } catch (e) { alert(e.message); }
     finally { setCreatingProfile(false); }
   };
 
   const saveOrder = async () => {
     if (!selectedOrder) return;
+    if (orderStatus === 'PROCESSING' && (selectedOrder.items || []).some(orderItem => !orderAssignments[orderItem.id])) {
+      setShowMeasurementGate(true);
+      return;
+    }
+    const openSizingAfterSave = orderStatus === 'PAID' && selectedOrder.status !== 'PAID'
+      && window.confirm('Move this order to the measurement stage and open sizing to add or assign measurements now?');
     setSaving(true);
     try {
       await api.updateOrderDetails(selectedOrder.id, {
         status: orderStatus, paymentStatus: payStatus, fabricType, customizations, tailorNotes,
+        orderItemMeasurements: (selectedOrder.items || []).map(orderItem => ({ orderItemId: orderItem.id, measurementProfileId: orderAssignments[orderItem.id] || null })),
       });
       await onRefresh();
+      if (openSizingAfterSave) setActivePanel('sizing');
     } catch (e) { alert(e.message); }
     finally { setSaving(false); }
   };
 
   const advanceOrderStage = async (newStatus) => {
     if (!selectedOrder) return;
+    if (newStatus === 'PROCESSING' && (selectedOrder.items || []).some(orderItem => !orderAssignments[orderItem.id])) {
+      setShowMeasurementGate(true);
+      return;
+    }
+    const openSizingAfterSave = newStatus === 'PAID' && selectedOrder.status !== 'PAID'
+      && window.confirm('Move this order to the measurement stage and open sizing to add or assign measurements now?');
     setStatusUpdating(true);
     try {
-      await api.updateOrderStatus(selectedOrder.id, newStatus);
+      await api.updateOrderDetails(selectedOrder.id, {
+        status: newStatus,
+        orderItemMeasurements: (selectedOrder.items || []).map(orderItem => ({ orderItemId: orderItem.id, measurementProfileId: orderAssignments[orderItem.id] || null })),
+      });
       setOrderStatus(newStatus);
       setSelectedOrder(prev => ({ ...prev, status: newStatus }));
       await onRefresh();
+      if (openSizingAfterSave) setActivePanel('sizing');
     } catch (e) { alert(e.message); }
     finally { setStatusUpdating(false); }
+  };
+
+  const saveOrderMeasurements = async () => {
+    if (!selectedOrder) return;
+    setMeasSaving(true);
+    try {
+      const orderItemMeasurements = (selectedOrder.items || []).map(orderItem => ({
+        orderItemId: orderItem.id,
+        measurementProfileId: orderAssignments[orderItem.id] || null,
+      }));
+      await api.updateOrderDetails(selectedOrder.id, { orderItemMeasurements });
+      setSelectedOrder(previous => ({ ...previous, items: previous.items.map(orderItem => ({ ...orderItem, measurementProfileId: orderAssignments[orderItem.id] || null })) }));
+      await onRefresh();
+    } catch (e) { alert(e.message); }
+    finally { setMeasSaving(false); }
   };
 
   const saveApptNotes = async () => {
@@ -735,7 +802,17 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                     <p className="text-[10px] text-slate-400">{measurements.length} profile{measurements.length !== 1 ? 's' : ''} on file</p>
                   </div>
                 </div>
-                <button onClick={() => setShowNewProfile(p => !p)}
+                <button onClick={() => {
+                  setShowNewProfile(previous => {
+                    const opening = !previous;
+                    if (opening) {
+                      setNewProfileName('');
+                      setMeasEdit(EMPTY_MEAS());
+                      setCustomMeasEdit([]);
+                    }
+                    return opening;
+                  });
+                }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-300 text-brand-600 text-xs font-bold hover:bg-brand-50 transition-all">
                   <Plus className="w-3.5 h-3.5" />{showNewProfile ? 'Cancel' : 'New Profile'}
                 </button>
@@ -749,6 +826,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                     placeholder="Profile name e.g. Wedding Lehenga"
                     className="w-full text-xs border border-brand-200 rounded-xl py-2.5 px-3 bg-white focus:outline-none focus:border-brand-400" />
                   <MeasurementGrid meas={measEdit} editing={true} onChange={(k, v) => setMeasEdit(p => ({ ...p, [k]: v }))} />
+                  <CustomMeasurementsEditor rows={customMeasEdit} editing onChange={setCustomMeasEdit} />
                   <button onClick={createNewProfile} disabled={creatingProfile || !newProfileName.trim()}
                     className="w-full py-2.5 rounded-xl bg-brand-500 text-[#3D2E3D] text-xs font-bold shadow-sm transition-all hover:bg-brand-600 disabled:opacity-60 flex items-center justify-center gap-2">
                     {creatingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -764,6 +842,33 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                   </div>
                   <p className="font-bold text-slate-600">No Sizing Profiles</p>
                   <p className="text-xs text-slate-400 mt-1">Add a profile to save this customer's measurements</p>
+                </div>
+              )}
+
+              {selectedOrder && (selectedOrder.items || []).length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-3">
+                  <div>
+                    <p className="text-xs font-extrabold text-indigo-900">Measurements for this order</p>
+                    <p className="text-[11px] text-indigo-700 mt-1">Assign one saved profile to each dress. Every product needs a profile before it can move to stitching.</p>
+                  </div>
+                  {(selectedOrder.items || []).map(orderItem => (
+                    <div key={orderItem.id} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-white rounded-xl border border-indigo-100 p-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-700 truncate">{orderItem.productName || 'Dress'}</p>
+                        <p className="text-[10px] text-slate-400">Qty {orderItem.quantity}</p>
+                      </div>
+                      <select value={orderAssignments[orderItem.id] || ''}
+                        onChange={e => setOrderAssignments(previous => ({ ...previous, [orderItem.id]: e.target.value }))}
+                        className="sm:w-56 text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-white">
+                        <option value="">Choose measurement profile</option>
+                        {measurements.map(profile => <option key={profile.id} value={profile.id}>{profile.profileName}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                  <button onClick={saveOrderMeasurements} disabled={measSaving}
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-60 flex items-center justify-center gap-2">
+                    {measSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Save order assignments
+                  </button>
                 </div>
               )}
 
@@ -792,7 +897,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                             className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold disabled:opacity-60">
                             {measSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Save
                           </button>
-                          <button onClick={() => { setMeasEditing(false); const p = measurements.find(m => m.id === activeMeasId); if (p) setMeasEdit(Object.fromEntries(MEAS_FIELDS.map(f => [f.key, p[f.key] || '']))); }}
+                          <button onClick={() => { setMeasEditing(false); const p = measurements.find(m => m.id === activeMeasId); if (p) { setMeasEdit(Object.fromEntries(MEAS_FIELDS.map(f => [f.key, p[f.key] || '']))); setCustomMeasEdit(Array.isArray(p.customMeasurements) ? p.customMeasurements : []); } }}
                             className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-400 text-xs font-bold hover:bg-slate-50">Cancel</button>
                         </>
                       ) : (
@@ -805,6 +910,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                   </div>
 
                   <MeasurementGrid meas={measEdit} editing={measEditing} onChange={(k, v) => setMeasEdit(p => ({ ...p, [k]: v }))} />
+                  <CustomMeasurementsEditor rows={customMeasEdit} editing={measEditing} onChange={setCustomMeasEdit} />
 
                   {/* Tailor notes from measurement */}
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -839,6 +945,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                           const o = customerHistoryOrders.find(x => x.id === e.target.value);
                           if (o) {
                             setSelectedOrder(o);
+                            setOrderAssignments(Object.fromEntries((o.items || []).map(orderItem => [orderItem.id, orderItem.measurementProfileId || o.measurementProfileId || ''])));
                             setOrderStatus(o.status || '');
                             setPayStatus(o.paymentStatus || '');
                             setFabricType(o.fabricType || '');
@@ -872,6 +979,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                       {linkedOrders.map(o => (
                         <button key={o.id} onClick={() => {
                           setSelectedOrder(o);
+                          setOrderAssignments(Object.fromEntries((o.items || []).map(orderItem => [orderItem.id, orderItem.measurementProfileId || o.measurementProfileId || ''])));
                           setOrderStatus(o.status || '');
                           setPayStatus(o.paymentStatus || '');
                           setFabricType(o.fabricType || '');
@@ -1024,6 +1132,23 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
           </button>
         </div>
       </div>
+      {showMeasurementGate && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/45" role="dialog" aria-modal="true" aria-labelledby="measurement-gate-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Ruler className="w-5 h-5" /></div>
+              <div>
+                <h3 id="measurement-gate-title" className="text-sm font-extrabold text-slate-800">Measurements needed before stitching</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">Add a new measurement profile or assign an existing customer profile to every product in this order before moving it to stitching.</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setShowMeasurementGate(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-50">Cancel</button>
+              <button onClick={() => { setShowMeasurementGate(false); setActivePanel('sizing'); }} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5"><Ruler className="w-3.5 h-3.5" />Go to measurements</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

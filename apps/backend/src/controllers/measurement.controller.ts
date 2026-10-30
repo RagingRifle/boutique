@@ -22,6 +22,7 @@ export const measurementCreateSchema = z.object({
     skirtLength: z.coerce.number().optional(),
     pantLength: z.coerce.number().optional(),
     tailorNotes: z.string().optional(),
+    customMeasurements: z.array(z.object({ name: z.string().min(1), value: z.string().min(1), unit: z.string().optional() })).optional(),
   }),
 });
 
@@ -40,6 +41,7 @@ export const measurementUpdateSchema = z.object({
     skirtLength: z.coerce.number().optional(),
     pantLength: z.coerce.number().optional(),
     tailorNotes: z.string().optional(),
+    customMeasurements: z.array(z.object({ name: z.string().min(1), value: z.string().min(1), unit: z.string().optional() })).optional(),
   }),
 });
 

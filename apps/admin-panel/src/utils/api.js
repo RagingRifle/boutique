@@ -951,6 +951,7 @@ class APIClient {
         quantity: item.quantity,
         price: Number(item.price),
         selectedCustomizations: item.selectedCustomizations || [],
+        measurementProfileId: item.measurementProfileId || item.measurementProfile?.id || null,
       })),
       // booking is already attached by the backend (getAssociatedBooking), pass it through
       booking: order.booking || null,
@@ -992,6 +993,7 @@ class APIClient {
         customizations: updates.customizations,
         tailorNotes: updates.tailorNotes,
         measurementProfileId: updates.measurementProfileId,
+        orderItemMeasurements: updates.orderItemMeasurements,
         newPayment: updates.newPayment,
       }),
     });

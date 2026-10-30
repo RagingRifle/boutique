@@ -25,6 +25,8 @@ import api from '../../utils/api';
 import { getSocket } from '../../utils/socket';
 import {
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Circle,
   Package,
@@ -174,6 +176,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
   const { theme, fonts, shadows } = useTheme();
 
   const [order, setOrder] = useState(null);
+  const [expandedAddons, setExpandedAddons] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
@@ -711,11 +714,46 @@ export default function OrderTrackingScreen({ route, navigation }) {
             <Text style={[styles.itemQty, { fontFamily: fonts.regular, color: theme.text.secondary }]}>
               Qty: {item.quantity}
             </Text>
-            {formatCustomizationDetails(item.selectedCustomizations).map((detail, optionIndex) => (
-              <Text key={`${item.id}-addon-${optionIndex}`} style={{ fontSize: 11, lineHeight: 16, marginTop: 2, fontFamily: fonts.medium, color: theme.text.secondary }}>
-                Add-on: {detail}
-              </Text>
-            ))}
+            {(() => {
+              const addonOptions = (Array.isArray(item.selectedCustomizations) ? item.selectedCustomizations : []).flatMap(group =>
+                (group.options || []).map(option => ({ group: group.name, ...option }))
+              );
+              const addonTotal = addonOptions.reduce((sum, option) => sum + (Number(option.price) || 0) * Number(item.quantity || 1), 0);
+              const lineTotal = Number(item.price) * Number(item.quantity || 1);
+              const expanded = !!expandedAddons[item.id];
+              return (
+                <>
+                  <Text style={{ fontSize: 11, lineHeight: 16, marginTop: 5, fontFamily: fonts.regular, color: theme.text.secondary }}>
+                    Product price: â‚¹{Math.max(0, lineTotal - addonTotal).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </Text>
+                  {addonOptions.length > 0 && (
+                    <>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} add-ons`}
+                        onPress={() => setExpandedAddons(previous => ({ ...previous, [item.id]: !previous[item.id] }))}
+                        style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}
+                      >
+                        <Text style={{ fontSize: 11, fontFamily: fonts.medium, color: theme.text.secondary }}>
+                          Add-ons: â‚¹{addonTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </Text>
+                        {expanded ? <ChevronUp size={13} color={theme.text.secondary} /> : <ChevronDown size={13} color={theme.text.secondary} />}
+                      </TouchableOpacity>
+                      {expanded && addonOptions.map((option, optionIndex) => (
+                        <View key={`${item.id}-addon-${optionIndex}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+                          <Text style={{ flex: 1, fontSize: 10.5, lineHeight: 15, fontFamily: fonts.regular, color: theme.text.secondary }}>
+                            {option.group}: {option.name}
+                          </Text>
+                          <Text style={{ fontSize: 10.5, fontFamily: fonts.medium, color: theme.text.secondary }}>
+                            â‚¹{((Number(option.price) || 0) * Number(item.quantity || 1)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </View>
           <Text style={[styles.itemPrice, { fontFamily: fonts.bold, color: theme.text.primary }]}>
             ₹{(Number(item.price) * item.quantity).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -1811,7 +1849,7 @@ const styles = StyleSheet.create({
   stepLabel: { fontSize: 10, textAlign: 'center', lineHeight: 14 },
   stepDate: { fontSize: 9, marginTop: 3, textAlign: 'center' },
   connector: {
-    height: 2, flex: 0.4, marginTop: 17,
+    height: 2, flex: 0.55, marginTop: 17,
     alignSelf: 'flex-start',
   },
 
@@ -1881,7 +1919,8 @@ const styles = StyleSheet.create({
   bookingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
     marginBottom: 16,
   },
   bookingTitleContainer: {
@@ -1900,6 +1939,7 @@ const styles = StyleSheet.create({
   bookingTitleText: {
     fontSize: 14.5,
     letterSpacing: 0.1,
+    flexShrink: 1,
   },
   bookingSubtitleText: {
     fontSize: 10.5,
@@ -1908,6 +1948,9 @@ const styles = StyleSheet.create({
   bookingStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+    marginTop: 4,
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,

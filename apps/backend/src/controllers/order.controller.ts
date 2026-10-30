@@ -19,6 +19,7 @@ export const orderStatusUpdateSchema = z.object({
     customizations: z.string().optional().nullable(),
     tailorNotes: z.string().optional().nullable(),
     measurementProfileId: z.string().uuid().optional().nullable(),
+    orderItemMeasurements: z.array(z.object({ orderItemId: z.string().uuid(), measurementProfileId: z.string().uuid().nullable() })).optional(),
     advancePayment: z.coerce.number().optional(),
     deliveryDate: z.string().optional().nullable(),
     newPayment: z.object({
@@ -426,7 +427,8 @@ export class OrderController {
               include: {
                 product: {
                   select: { name: true, images: true }
-                }
+                },
+                measurementProfile: true,
               }
             },
             measurementProfile: true,
@@ -510,6 +512,27 @@ export class OrderController {
         return res.status(404).json({ success: false, message: 'Order not found' });
       }
 
+      const existingItems = await prisma.orderItem.findMany({ where: { orderId: id }, select: { id: true, measurementProfileId: true } });
+      const itemAssignments = Array.isArray(req.body.orderItemMeasurements) ? req.body.orderItemMeasurements : [];
+      if (itemAssignments.length) {
+        const itemIds = new Set(existingItems.map(item => item.id));
+        if (itemAssignments.some((assignment: any) => !itemIds.has(assignment.orderItemId))) {
+          return res.status(400).json({ success: false, message: 'A product in the measurement assignment does not belong to this order.' });
+        }
+        const profileIds = [...new Set(itemAssignments.map((assignment: any) => assignment.measurementProfileId).filter(Boolean))] as string[];
+        const profiles = profileIds.length ? await prisma.measurementProfile.findMany({ where: { id: { in: profileIds } }, select: { id: true, userId: true } }) : [];
+        if (profiles.length !== profileIds.length || (existing.userId && profiles.some(profile => profile.userId !== existing.userId))) {
+          return res.status(400).json({ success: false, message: 'Choose a measurement profile that belongs to this customer.' });
+        }
+      }
+      if (status === 'PROCESSING') {
+        const submitted = new Map(itemAssignments.map((assignment: any) => [assignment.orderItemId, assignment.measurementProfileId]));
+        const unassigned = existingItems.filter(item => !(submitted.has(item.id) ? submitted.get(item.id) : item.measurementProfileId));
+        if (unassigned.length) {
+          return res.status(400).json({ success: false, message: 'Add or assign a measurement profile to every product in this order before moving it to stitching.' });
+        }
+      }
+
       const updateData: any = {};
       if (status !== undefined) {
         updateData.status = status;
@@ -572,7 +595,11 @@ export class OrderController {
 
       // Do not auto-set paymentStatus to REFUNDED. Admin manually marks as REFUNDED.
 
-      const order = await prisma.order.update({
+      const order = await prisma.$transaction(async (tx: any) => {
+        for (const assignment of itemAssignments) {
+          await tx.orderItem.update({ where: { id: assignment.orderItemId }, data: { measurementProfileId: assignment.measurementProfileId } });
+        }
+        return tx.order.update({
         where: { id },
         data: updateData,
         include: {
@@ -593,6 +620,7 @@ export class OrderController {
           },
           measurementProfile: true
         }
+        });
       });
 
       if (deliveryDateChanged && order.userId) {

@@ -63,11 +63,13 @@ model MeasurementProfile {
   skirtLength   Decimal?             @db.Decimal(5, 2)
   pantLength    Decimal?             @db.Decimal(5, 2)
   tailorNotes   String?
+  customMeasurements Json?
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   history       MeasurementHistory[]
   user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders        Order[]
+  orderItems    OrderItem[]
 
   @@index([userId])
 }
@@ -338,6 +340,8 @@ model OrderItem {
   quantity  Int
   price     Decimal @db.Decimal(10, 2)
   selectedCustomizations Json?
+  measurementProfileId String?
+  measurementProfile MeasurementProfile? @relation(fields: [measurementProfileId], references: [id], onDelete: SetNull)
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
 
