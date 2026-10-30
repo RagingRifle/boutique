@@ -72,7 +72,9 @@ export default function ProductManager() {
   const [isBannerUploading, setIsBannerUploading] = useState(false);
 
   const handleImageUpload = async (e, index = 0) => {
-    const file = e.target.files[0];
+    const input = e.target;
+    const file = input.files[0];
+    input.value = '';
     if (!file) return;
     setIsUploading(index);
     setError('');
@@ -84,9 +86,43 @@ export default function ProductManager() {
         return { ...prev, images: newImages };
       });
     } catch (err) {
-      setError('Image upload failed.');
+      setError(err.message || `Failed to upload ${file.name}.`);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleGalleryUpload = async (e) => {
+    const input = e.target;
+    const files = Array.from(input.files || []);
+    input.value = '';
+    if (!files.length) return;
+    const currentImages = (formData.images || []).filter(Boolean).length;
+    const allowedFiles = files.slice(0, Math.max(0, 4 - currentImages));
+    if (!allowedFiles.length) {
+      setError('A product can have up to 4 gallery images. Remove an image before uploading more.');
+      return;
+    }
+    setIsUploading(true);
+    setError('');
+    const failedFiles = [];
+    for (const file of allowedFiles) {
+      try {
+        const url = await api.uploadImage(file);
+        setFormData(prev => {
+          const images = [...(prev.images || [])];
+          const emptyIndex = images.findIndex(image => !image);
+          if (emptyIndex >= 0) images[emptyIndex] = url;
+          else if (images.length < 4) images.push(url);
+          return { ...prev, images: images.slice(0, 4) };
+        });
+      } catch (err) {
+        failedFiles.push(`${file.name}: ${err.message || 'upload failed'}`);
+      }
+    }
+    setIsUploading(false);
+    if (failedFiles.length) {
+      setError(`Could not upload ${failedFiles.length} photo${failedFiles.length === 1 ? '' : 's'}: ${failedFiles.join('; ')}`);
     }
   };
 
@@ -99,7 +135,7 @@ export default function ProductManager() {
       const url = await api.uploadImage(file);
       setFormData(prev => ({ ...prev, bannerImage: url }));
     } catch (err) {
-      setError('Banner upload failed.');
+      setError(err.message || `Failed to upload ${file.name}.`);
     } finally {
       setIsBannerUploading(false);
     }
@@ -221,7 +257,7 @@ export default function ProductManager() {
         .filter(group => group.name && group.options.length),
       isTrending: formData.isTrending,
       trendingScheduledAt: formData.isTrending && formData.trendingScheduledAt ? new Date(formData.trendingScheduledAt).toISOString() : undefined,
-      images: formData.images.filter(img => img.trim() !== ''),
+      images: (formData.images || []).filter(img => img.trim() !== ''),
       bannerImage: formData.bannerImage || null
     };
 
@@ -641,7 +677,20 @@ export default function ProductManager() {
               </section>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase block">Product Images (Up to 4) *</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase block">Product Gallery (Up to 4 slides) *</label>
+                <p className="text-[10px] text-slate-500">Upload several photos together. Customers can swipe between them in the mobile app.</p>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700 hover:bg-brand-100">
+                  <FileImage className="h-4 w-4" />
+                  {isUploading === true ? 'Uploading gallery…' : 'Upload gallery photos'}
+                  <input type="file" accept="image/*" multiple onChange={handleGalleryUpload} className="hidden" disabled={isUploading !== false} />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(formData.images || []).filter(Boolean).map((image, index) => (
+                    <div key={`${image}-${index}`} className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200">
+                      <img src={image} alt={`Product gallery slide ${index + 1}`} className="h-full w-full object-cover" />
+                    </div>
+                  ))}
+                </div>
                 {[0, 1, 2, 3].map(index => (
                   <div key={index} className="flex gap-3 items-center">
                     <input

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -43,6 +43,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const [selectedCustomizations, setSelectedCustomizations] = useState({});
   const [adding, setAdding] = useState(false);
   const [activeThumbnailIndex, setActiveThumbnailIndex] = useState(0);
+  const mainImageScrollRef = useRef(null);
   
   const [similarCategoryProducts, setSimilarCategoryProducts] = useState([]);
   const [similarSubCategoryProducts, setSimilarSubCategoryProducts] = useState([]);
@@ -66,6 +67,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
       if (prodRes.success) {
         const prod = prodRes.data;
         setProduct(prod);
+        setActiveThumbnailIndex(0);
 
         if (categoriesRes.success) {
           const cat = categoriesRes.data.find(c => c.id === prod.categoryId);
@@ -383,14 +385,41 @@ export default function ProductDetailsScreen({ route, navigation }) {
 
         {/* Large Product Image Card */}
         <View style={[styles.imageCard, shadows.premium]}>
-          <Image 
-            source={{ uri: thumbnails[activeThumbnailIndex] }} 
-            style={styles.mainImage} 
-            resizeMode="cover"
-          />
+          {thumbnails.length > 0 ? (
+            <ScrollView
+              ref={mainImageScrollRef}
+              horizontal
+              pagingEnabled
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={event => {
+                const pageWidth = width - 40;
+                setActiveThumbnailIndex(Math.max(0, Math.min(thumbnails.length - 1, Math.round(event.nativeEvent.contentOffset.x / pageWidth))));
+              }}
+            >
+              {thumbnails.map((imageUri, index) => (
+                <Image
+                  key={`${product.id}-gallery-${index}`}
+                  source={{ uri: imageUri }}
+                  style={[styles.mainImage, { width: width - 40 }]}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.mainImage, { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg.input }]}>
+              <ShoppingBag size={42} color={theme.text.muted} />
+            </View>
+          )}
           <TouchableOpacity style={styles.heartBtn} activeOpacity={0.7} onPress={toggleFavorite}>
             <WishlistIcon size={20} color={isFav ? '#ef4444' : theme.brand[900]} fill={isFav ? '#ef4444' : 'transparent'} />
           </TouchableOpacity>
+          {thumbnails.length > 1 && (
+            <View style={{ position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(15,23,42,0.42)' }}>
+              {thumbnails.map((_, index) => <View key={`gallery-dot-${index}`} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: index === activeThumbnailIndex ? '#fff' : 'rgba(255,255,255,0.5)' }} />)}
+            </View>
+          )}
         </View>
         
         {/* Thumbnails Row (Moved under main image) */}
@@ -402,7 +431,10 @@ export default function ProductDetailsScreen({ route, navigation }) {
                 <TouchableOpacity
                   key={index}
                   style={[styles.thumbnailWrapper, isActive && { borderColor: theme.brand[500], borderWidth: 2 }]}
-                  onPress={() => setActiveThumbnailIndex(index)}
+                  onPress={() => {
+                    setActiveThumbnailIndex(index);
+                    mainImageScrollRef.current?.scrollTo({ x: index * (width - 40), animated: true });
+                  }}
                   activeOpacity={0.8}
                 >
                   <Image source={{ uri: thumb }} style={styles.thumbnailImage} />

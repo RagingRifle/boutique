@@ -7,6 +7,7 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   Alert,
+  KeyboardAvoidingView,
   Modal,
   TextInput,
   ScrollView,
@@ -1127,6 +1128,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       {/* New Booking Modal */}
       <Modal visible={bookingModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
@@ -1281,12 +1283,14 @@ export default function AppointmentBookingScreen({ navigation, route }) {
 
             </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       {/* Reschedule Modal */}
       <Modal visible={rescheduleModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
@@ -1373,12 +1377,14 @@ export default function AppointmentBookingScreen({ navigation, route }) {
 
             </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       {/* Quick Slot Booking Modal */}
       <Modal visible={slotModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
@@ -1473,6 +1479,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
 
             </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 

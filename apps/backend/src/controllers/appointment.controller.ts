@@ -27,6 +27,7 @@ export const appointmentUpdateSchema = z.object({
     status: z.enum(['PENDING', 'CONFIRMED', 'CANCELLED', 'RESCHEDULED', 'CONSULTED', 'ORDERED']).optional(),
     notes: z.string().optional(),
     orderId: z.string().uuid().optional().nullable(),
+    assignedStaffId: z.string().uuid().optional().nullable(),
   }),
 });
 
@@ -68,7 +69,10 @@ export class AppointmentController {
           orderBy: { date: 'asc' },
           skip,
           take: Number(limit),
-          include: { user: { select: { fullName: true, email: true, phoneNumber: true } } },
+          include: {
+            user: { select: { fullName: true, email: true, phoneNumber: true } },
+            assignedStaff: { select: { id: true, fullName: true } },
+          },
         }),
         prisma.appointment.count({ where }),
       ]);
@@ -320,7 +324,7 @@ export class AppointmentController {
   static async updateAppointment(req: Request, res: Response, next: NextFunction) {
     const user = req.user!;
     const { id } = req.params;
-    const { date, timeSlot, status, notes, orderId } = req.body;
+    const { date, timeSlot, status, notes, orderId, assignedStaffId } = req.body;
 
     let lockKey: string | null = null;
     let lockAcquired = false;
@@ -337,6 +341,19 @@ export class AppointmentController {
       // Check ownership
       if (appointment.userId !== user.id && user.role === Role.CUSTOMER) {
         return res.status(403).json({ success: false, message: 'Forbidden: You do not own this booking' });
+      }
+
+      if (assignedStaffId !== undefined) {
+        if (user.role === Role.CUSTOMER) {
+          return res.status(403).json({ success: false, message: 'Only staff can assign a fitting.' });
+        }
+        if (assignedStaffId) {
+          const staff = await prisma.user.findFirst({
+            where: { id: assignedStaffId, role: { in: [Role.STAFF, Role.ADMIN, Role.SUPERADMIN] } },
+            select: { id: true },
+          });
+          if (!staff) return res.status(400).json({ success: false, message: 'Select a valid staff member.' });
+        }
       }
 
       // Enforce cancellation limit: Prevents cancellations if the start time is less than 2 hours away.
@@ -406,7 +423,9 @@ export class AppointmentController {
           ...(status && { status: status as AppointmentStatus }),
           ...(notes !== undefined && { notes }),
           ...(orderId !== undefined && { orderId }),
+          ...(assignedStaffId !== undefined && { assignedStaffId }),
         },
+        include: { assignedStaff: { select: { id: true, fullName: true } } },
       });
 
       if (lockAcquired && lockKey) {

@@ -1468,6 +1468,29 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
     }
   };
 
+  const handleAssignBookingStaff = async (booking, staffId) => {
+    try {
+      const assignedStaff = staffList.find(member => member.id === staffId);
+      const payload = { assignedStaffId: staffId || null };
+      if (booking.type === 'HOME_VISIT') {
+        await api.updateStoreVisit(booking.id, payload);
+      } else {
+        await api.updateAppointment(booking.id, payload);
+      }
+      setSelectedOrder(prev => prev ? ({
+        ...prev,
+        booking: {
+          ...prev.booking,
+          assignedStaffId: staffId || null,
+          assignedStaffName: assignedStaff?.fullName || null,
+        },
+      }) : prev);
+      loadOrders();
+    } catch (err) {
+      alert(err.message || 'Staff assignment failed.');
+    }
+  };
+
   const handleCompleteVisit = async (e) => {
     e.preventDefault();
     if (!reportVisitId || !completionNotes.trim()) return;
@@ -4357,6 +4380,18 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                             <div className="flex justify-between items-center text-xs text-slate-650 mt-1">
                               <span>Time Slot:</span>
                               <span className="font-bold">{booking.timeSlot}</span>
+                            </div>
+                            <div className="mt-3 border-t border-slate-200 pt-3">
+                              <label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">Assigned Fitting Staff</label>
+                              <select
+                                value={booking.assignedStaffId || ''}
+                                onChange={event => handleAssignBookingStaff(booking, event.target.value)}
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-brand-500 focus:outline-none"
+                              >
+                                <option value="">Unassigned</option>
+                                {staffList.map(member => <option key={member.id} value={member.id}>{member.fullName} ({member.role})</option>)}
+                              </select>
+                              {staffList.length === 0 && <p className="mt-1 text-[10px] text-amber-700">Add a team member under Team &amp; Tailors first.</p>}
                             </div>
                           </div>
 

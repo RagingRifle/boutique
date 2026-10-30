@@ -481,7 +481,7 @@ export default function CheckoutScreen({ route, navigation }) {
       return;
     }
 
-    if (!bookingSlot) {
+    if (bookingType === 'STANDARD' && !bookingSlot) {
       Alert.alert('Validation Error', 'Please select a valid time slot.');
       return;
     }
@@ -527,6 +527,14 @@ export default function CheckoutScreen({ route, navigation }) {
         const orderData = res.data;
         setPlacedOrder(orderData);
 
+        // A previous attempt may have created the fitting but lost the response.
+        // Check the order before creating another appointment/visit.
+        const latestOrder = await api.get(`/orders/${orderData.id}`).catch(() => null);
+        if (latestOrder?.success && latestOrder.data?.booking) {
+          setCurrentStep(2);
+          return;
+        }
+
         // Schedule fitting booking
         const formattedDate = new Date(`${bookingDate}T10:00:00Z`).toISOString();
         if (bookingType === 'STANDARD') {
@@ -538,20 +546,21 @@ export default function CheckoutScreen({ route, navigation }) {
             type: 'CONSULTATION',
             notes: `Order Invoice: ${orderData.invoiceNumber}. Notes: ${bookingNotes}`,
             orderId: orderData.id,
-          }).catch(err => console.error("Failed standard booking creation:", err));
+          });
         } else {
           // POST /visits
           await api.post('/visits', {
             preferredDate: formattedDate,
             address: address.address,
             requirements: `Order Invoice: ${orderData.invoiceNumber}. Notes: ${bookingNotes}`,
-          }).catch(err => console.error("Failed home visit booking creation:", err));
+            orderId: orderData.id,
+          });
         }
 
         setCurrentStep(2); // Success Screen
       }
     } catch (err) {
-      Alert.alert('Checkout Failed', err.message || 'Transaction could not be completed.');
+      Alert.alert('Fitting Booking Failed', `${err.message || 'The order or fitting request could not be completed.'}\n\nRetrying uses the same request key and will not create a duplicate order.`);
     } finally {
       setCheckoutLoading(false);
     }
@@ -845,7 +854,7 @@ export default function CheckoutScreen({ route, navigation }) {
           </TouchableOpacity>
 
           <Text style={[styles.sectionHeading, { fontFamily: fonts.bold, color: theme.text.primary, marginTop: 24 }]}>
-            Preferred Date & Time Slot
+            {bookingType === 'STANDARD' ? 'Preferred Date & Time Slot' : 'Preferred Home Visit Date'}
           </Text>
 
           {/* Date Selector Field */}
@@ -861,8 +870,8 @@ export default function CheckoutScreen({ route, navigation }) {
             <ChevronLeft size={16} color="#64748b" style={{ transform: [{ rotate: '-90deg' }] }} />
           </TouchableOpacity>
 
-          {/* Time Slot Selection */}
-          <View style={styles.slotsContainer}>
+          {/* Studio fittings are booked in a fixed slot; home visit time is coordinated by staff. */}
+          {bookingType === 'STANDARD' && <View style={styles.slotsContainer}>
             {getFilteredTimeSlots().length > 0 ? (
               getFilteredTimeSlots().map(s => (
                 <TouchableOpacity
@@ -889,7 +898,7 @@ export default function CheckoutScreen({ route, navigation }) {
                 No time slots available for today. Please select another date.
               </Text>
             )}
-          </View>
+          </View>}
 
           {/* Quick Order */}
           <Text style={[styles.sectionHeading, { fontFamily: fonts.bold, color: theme.text.primary, marginTop: 24 }]}>
@@ -1234,7 +1243,7 @@ export default function CheckoutScreen({ route, navigation }) {
             <View style={styles.successDetailRow}>
               <Text style={[styles.successDetailLabel, { fontFamily: fonts.bold, color: theme.text.secondary }]}>Fitting Schedule</Text>
               <Text style={[styles.successDetailValue, { fontFamily: fonts.bold, color: theme.brand[500] }]}>
-                {bookingDate ? formatBookingDate(bookingDate) : 'Not scheduled'}{bookingSlot ? ` · ${bookingSlot}` : ''}
+                {bookingDate ? formatBookingDate(bookingDate) : 'Not scheduled'}{bookingType === 'STANDARD' && bookingSlot ? ` · ${bookingSlot}` : bookingType === 'HOME_VISIT' ? ' · Time to be confirmed' : ''}
               </Text>
             </View>
 

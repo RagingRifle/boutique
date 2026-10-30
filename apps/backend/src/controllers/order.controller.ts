@@ -77,14 +77,19 @@ export class OrderController {
   /**
    * Helper: Retrieve fitting booking associated with an order's invoice number
    */
-  static async getAssociatedBooking(invoiceNumber: string) {
+  static async getAssociatedBooking(invoiceNumber: string, orderId?: string) {
     if (!invoiceNumber) return null;
 
     // 1. Check Studio Appointments
     const appointment = await prisma.appointment.findFirst({
       where: {
-        notes: invoiceNumber,
+        OR: [
+          ...(orderId ? [{ orderId }] : []),
+          { notes: { contains: invoiceNumber } },
+        ],
       },
+      orderBy: { createdAt: 'desc' },
+      include: { assignedStaff: { select: { id: true, fullName: true } } },
     });
 
     if (appointment) {
@@ -95,14 +100,21 @@ export class OrderController {
         timeSlot: appointment.timeSlot,
         status: appointment.status,
         notes: appointment.notes,
+        assignedStaffId: appointment.assignedStaffId,
+        assignedStaffName: appointment.assignedStaff?.fullName || null,
       };
     }
 
     // 2. Check Tailor Home Visits
     const visit = await prisma.storeVisit.findFirst({
       where: {
-        requirements: invoiceNumber,
+        OR: [
+          ...(orderId ? [{ orderId }] : []),
+          { requirements: { contains: invoiceNumber } },
+        ],
       },
+      orderBy: { createdAt: 'desc' },
+      include: { assignedStaff: { select: { id: true, fullName: true } } },
     });
 
     if (visit) {
@@ -113,6 +125,8 @@ export class OrderController {
         timeSlot: 'Home Visit Fitting',
         status: visit.status,
         requirements: visit.requirements,
+        assignedStaffId: visit.assignedStaffId,
+        assignedStaffName: visit.assignedStaff?.fullName || null,
       };
     }
 
@@ -155,19 +169,28 @@ export class OrderController {
         prisma.order.count({ where: { userId } }),
       ]);
 
-      const invoiceNumbers = orders.map((o) => o.invoiceNumber);
+      const invoiceNumbers = orders.map((o) => o.invoiceNumber).filter(Boolean);
+      const orderIds = orders.map((o) => o.id);
 
       const [appointments, visits] = await Promise.all([
         prisma.appointment.findMany({
-          where: { notes: { in: invoiceNumbers } },
+          where: { OR: [
+            { orderId: { in: orderIds } },
+            ...invoiceNumbers.map(invoiceNumber => ({ notes: { contains: invoiceNumber } })),
+          ] },
+          include: { assignedStaff: { select: { id: true, fullName: true } } },
         }),
         prisma.storeVisit.findMany({
-          where: { requirements: { in: invoiceNumbers } },
+          where: { OR: [
+            { orderId: { in: orderIds } },
+            ...invoiceNumbers.map(invoiceNumber => ({ requirements: { contains: invoiceNumber } })),
+          ] },
+          include: { assignedStaff: { select: { id: true, fullName: true } } },
         }),
       ]);
 
       const ordersWithBookings = orders.map((order) => {
-        const appointment = appointments.find((a) => a.notes === order.invoiceNumber);
+        const appointment = appointments.find((a) => a.orderId === order.id || (a.notes || '').includes(order.invoiceNumber));
         let booking = null;
         if (appointment) {
           booking = {
@@ -177,9 +200,11 @@ export class OrderController {
             timeSlot: appointment.timeSlot,
             status: appointment.status,
             notes: appointment.notes,
+            assignedStaffId: appointment.assignedStaffId,
+            assignedStaffName: appointment.assignedStaff?.fullName || null,
           };
         } else {
-          const visit = visits.find((v) => v.requirements === order.invoiceNumber);
+          const visit = visits.find((v) => v.orderId === order.id || (v.requirements || '').includes(order.invoiceNumber));
           if (visit) {
             booking = {
               id: visit.id,
@@ -188,6 +213,8 @@ export class OrderController {
               timeSlot: 'Home Visit Fitting',
               status: visit.status,
               requirements: visit.requirements,
+              assignedStaffId: visit.assignedStaffId,
+              assignedStaffName: visit.assignedStaff?.fullName || null,
             };
           }
         }
@@ -255,7 +282,7 @@ export class OrderController {
         return res.status(403).json({ success: false, message: 'Forbidden' });
       }
 
-      const booking = await OrderController.getAssociatedBooking(order.invoiceNumber);
+      const booking = await OrderController.getAssociatedBooking(order.invoiceNumber, order.id);
 
       return res.status(200).json({
         success: true,

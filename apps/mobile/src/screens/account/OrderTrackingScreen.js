@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Platform,
   StatusBar,
   Image,
@@ -931,7 +932,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
                 <Text style={[styles.gridSlotLabel, { fontFamily: fonts.regular, color: theme.text.secondary }]}>
                   Time Window
                 </Text>
-                <Text style={[styles.gridSlotValue, { fontFamily: fonts.bold, color: theme.text.primary }]} numberOfLines={1}>
+                <Text style={[styles.gridSlotValue, { fontFamily: fonts.bold, color: theme.text.primary }]}>
                   {booking.timeSlot}
                 </Text>
               </View>
@@ -1050,6 +1051,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
             activeOpacity={1} 
             onPress={() => !rescheduling && setShowRescheduleModal(false)} 
           />
+          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.rescheduleModalContent, { backgroundColor: theme.bg.card }]}>
             {/* Header */}
             <View style={[styles.modalHeaderRow, { borderBottomColor: theme.border }]}>
@@ -1179,6 +1181,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
               </TouchableOpacity>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     );
@@ -1946,7 +1949,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   dateTimeGridRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 12,
   },
   gridSlotBox: {

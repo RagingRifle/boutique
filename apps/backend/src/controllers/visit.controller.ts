@@ -12,6 +12,7 @@ export const visitCreateSchema = z.object({
     preferredDate: z.string().datetime(),
     address: z.string().min(1),
     requirements: z.string().min(1),
+    orderId: z.string().uuid().optional().nullable(),
   }),
 });
 
@@ -30,6 +31,7 @@ export const visitUpdateSchema = z.object({
     requirements: z.string().min(1).optional(),
     status: z.enum(['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).optional(),
     orderId: z.string().uuid().optional().nullable(),
+    assignedStaffId: z.string().uuid().optional().nullable(),
   }),
 });
 
@@ -93,9 +95,16 @@ export class VisitController {
    */
   static async createVisit(req: Request, res: Response, next: NextFunction) {
     const user = req.user!;
-    const { preferredDate, address, requirements } = req.body;
+    const { preferredDate, address, requirements, orderId } = req.body;
 
     try {
+      if (orderId) {
+        const order = await prisma.order.findUnique({ where: { id: orderId }, select: { userId: true } });
+        if (!order || order.userId !== user.id) {
+          return res.status(400).json({ success: false, message: 'This home visit cannot be linked to the order.' });
+        }
+      }
+
       if (user.role === Role.CUSTOMER) {
         // Layer 1: Burst limit (1 request per 3 seconds per user)
         const burstKey = `visit:burst:${user.id}`;
@@ -129,6 +138,7 @@ export class VisitController {
           preferredDate: new Date(preferredDate),
           address,
           requirements,
+          orderId: orderId || undefined,
         },
       });
 
@@ -314,7 +324,7 @@ export class VisitController {
   static async updateVisit(req: Request, res: Response, next: NextFunction) {
     const user = req.user!;
     const { id } = req.params;
-    const { preferredDate, confirmedDate, address, requirements, status, orderId } = req.body;
+    const { preferredDate, confirmedDate, address, requirements, status, orderId, assignedStaffId } = req.body;
 
     try {
       const visit = await prisma.storeVisit.findUnique({
@@ -328,6 +338,19 @@ export class VisitController {
       // Check ownership/permissions
       if (visit.customerId !== user.id && user.role === Role.CUSTOMER) {
         return res.status(403).json({ success: false, message: 'Forbidden: You do not own this visit request' });
+      }
+
+      if (assignedStaffId !== undefined) {
+        if (user.role === Role.CUSTOMER) {
+          return res.status(403).json({ success: false, message: 'Only staff can assign a home visit.' });
+        }
+        if (assignedStaffId) {
+          const staff = await prisma.user.findFirst({
+            where: { id: assignedStaffId, role: { in: [Role.STAFF, Role.ADMIN, Role.SUPERADMIN] } },
+            select: { id: true },
+          });
+          if (!staff) return res.status(400).json({ success: false, message: 'Select a valid staff member.' });
+        }
       }
 
       // Reset to PENDING if user reschedules so admin can re-confirm/assign staff
@@ -345,7 +368,9 @@ export class VisitController {
           ...(requirements && { requirements }),
           ...(targetStatus && { status: targetStatus as VisitStatus }),
           ...(orderId !== undefined && { orderId }),
+          ...(assignedStaffId !== undefined && { assignedStaffId }),
         },
+        include: { assignedStaff: { select: { id: true, fullName: true } } },
       });
 
       // Broadcast WebSocket notification to Staff, Customer and Admins

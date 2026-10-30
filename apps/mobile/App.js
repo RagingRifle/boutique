@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/NavigationRef';
@@ -30,12 +31,18 @@ export default function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <NavigationContainer ref={navigationRef} linking={linking}>
-              <RootNavigator />
-              <BroadcastAlertListener />
-              <AppAlertsOverlay />
-              <StatusBar style="auto" />
-            </NavigationContainer>
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={0}
+            >
+              <NavigationContainer ref={navigationRef} linking={linking}>
+                <RootNavigator />
+                <BroadcastAlertListener />
+                <AppAlertsOverlay />
+                <StatusBar style="auto" />
+              </NavigationContainer>
+            </KeyboardAvoidingView>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
