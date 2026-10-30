@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MARCOS Staging",
-    "slug": "marcos-boutique",
+    "slug": "test",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -50,8 +50,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "5bce50a5-a50f-4b2e-b739-9c694db2333c"
+        "projectId": "4c6734da-5c09-4c31-9c55-7fc6f0a7499b"
       }
-    }
+    },
+    "owner": "rifle117-org"
   }
 }
