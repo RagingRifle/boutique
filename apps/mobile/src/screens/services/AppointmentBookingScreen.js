@@ -1128,8 +1128,8 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       {/* New Booking Modal */}
       <Modal visible={bookingModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card }]}>
+          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card, height: '90%' }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.brand[900], fontFamily: fonts.bold }]}>
@@ -1140,7 +1140,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
               
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>DATE</Text>
               <TouchableOpacity 
@@ -1290,8 +1290,8 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       {/* Reschedule Modal */}
       <Modal visible={rescheduleModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card }]}>
+          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card, height: '90%' }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.brand[900], fontFamily: fonts.bold }]}>
@@ -1302,7 +1302,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
               
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>NEW DATE</Text>
               <TouchableOpacity 
@@ -1384,8 +1384,8 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       {/* Quick Slot Booking Modal */}
       <Modal visible={slotModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card }]}>
+          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card, height: '90%' }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.brand[900], fontFamily: fonts.bold }]}>
@@ -1396,7 +1396,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
 
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>DATE</Text>
               <TouchableOpacity

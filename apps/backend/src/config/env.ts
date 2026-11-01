@@ -9,6 +9,7 @@ const envSchema = z.object({
   SKIP_DEMO_SEED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   APP_NAME: z.string().default('MARCOS'),
   APP_VERSION: z.string().default('1.0.0'),
+  PUBLIC_API_URL: z.string().url().optional(),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters (use: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))")'),

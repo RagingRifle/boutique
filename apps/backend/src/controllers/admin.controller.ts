@@ -1317,7 +1317,8 @@ export class AdminController {
         url = await CloudinaryService.uploadFile(file.buffer, env.CLOUDINARY_UPLOAD_FOLDER, file.mimetype);
       } else {
         const fileKey = `uploads/${Date.now()}-${file.originalname}`;
-        url = await R2Service.uploadFile(file.buffer, fileKey, file.mimetype);
+        const publicApiUrl = env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
+        url = await R2Service.uploadFile(file.buffer, fileKey, file.mimetype, publicApiUrl);
       }
 
       return res.status(200).json({

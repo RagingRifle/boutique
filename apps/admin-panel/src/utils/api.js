@@ -1,6 +1,15 @@
 
 // API Configuration
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://50.6.44.247:5100/api/v1';
+const PUBLIC_API_ORIGIN = BASE_URL.replace(/\/api\/v1\/?$/i, '');
+const normalizeImageUrl = (url) => typeof url === 'string'
+  ? url.replace(/^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?(?=\/)/i, PUBLIC_API_ORIGIN)
+  : url;
+const normalizeProductImages = (product) => product && ({
+  ...product,
+  images: Array.isArray(product.images) ? product.images.map(normalizeImageUrl) : product.images,
+  bannerImage: normalizeImageUrl(product.bannerImage),
+});
 
 class APIClient {
   constructor() {
@@ -233,7 +242,7 @@ class APIClient {
     if (categorySlug) query.append('category', categorySlug);
 
     const res = await this.request(`/products?${query.toString()}`);
-    return res;
+    return { ...res, data: Array.isArray(res.data) ? res.data.map(normalizeProductImages) : res.data };
 
   }
 
@@ -241,13 +250,13 @@ class APIClient {
 
     // Fallback for components needing all products (e.g. Sidebar counts)
     const res = await this.request('/products?limit=1000');
-    return res.data;
+    return Array.isArray(res.data) ? res.data.map(normalizeProductImages) : res.data;
 
   }
 
   async getProductById(id) {
     const res = await this.request(`/products/${id}`);
-    return res.data;
+    return normalizeProductImages(res.data);
   }
 
   async createProduct(product) {

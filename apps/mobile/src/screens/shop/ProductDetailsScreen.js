@@ -13,7 +13,7 @@ import {
   Share
 } from 'react-native';
 import { useTheme } from '../../styles/ThemeContext';
-import api from '../../utils/api';
+import api, { API_URL } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import WishlistIcon from '../../components/common/WishlistIcon';
 import {
@@ -27,6 +27,12 @@ import {
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
+const API_ORIGIN = API_URL.replace(/\/api\/v1\/?$/i, '');
+
+function resolveProductImageUri(uri) {
+  if (typeof uri !== 'string' || !uri.trim()) return null;
+  return uri.trim().replace(/^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?(?=\/)/i, API_ORIGIN);
+}
 
 export default function ProductDetailsScreen({ route, navigation }) {
   const { productId } = route.params;
@@ -280,8 +286,8 @@ export default function ProductDetailsScreen({ route, navigation }) {
     );
   }
 
-  const thumbnails = (product.images && product.images.length > 0) 
-    ? product.images 
+  const thumbnails = Array.isArray(product.images)
+    ? product.images.map(resolveProductImageUri).filter(Boolean)
     : [];
 
   // Check if any active offer grants free delivery for this product
@@ -377,7 +383,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
         {/* Product Banner Image (above product images) */}
         {product.bannerImage ? (
           <Image 
-            source={{ uri: product.bannerImage }} 
+            source={{ uri: resolveProductImageUri(product.bannerImage) || product.bannerImage }}
             style={[styles.bannerImage, shadows.premium]} 
             resizeMode="cover"
           />

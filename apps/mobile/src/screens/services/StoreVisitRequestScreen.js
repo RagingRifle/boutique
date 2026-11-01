@@ -10,7 +10,8 @@ import {
   Modal,
   TextInput,
   ScrollView,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { useTheme } from '../../styles/ThemeContext';
 import { APP_CONFIG } from '../../config/app.config';
@@ -266,6 +267,7 @@ export default function StoreVisitRequestScreen({ navigation }) {
         visible={requestModalVisible}
         onRequestClose={() => setRequestModalVisible(false)}
       >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={styles.modalBg}>
           <View style={[styles.modalCard, shadows.premium, { backgroundColor: theme.bg.card }]}>
             <View style={styles.modalHeader}>
@@ -277,7 +279,7 @@ export default function StoreVisitRequestScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
               {/* Preferred date */}
               <View style={styles.inputContainer}>
                 <Text style={[styles.label, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>
@@ -355,6 +357,7 @@ export default function StoreVisitRequestScreen({ navigation }) {
             </ScrollView>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -520,7 +523,8 @@ const styles = StyleSheet.create({
   modalCard: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: '85%',
+    height: '85%',
+    maxHeight: '90%',
     padding: 24,
   },
   modalHeader: {

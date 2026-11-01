@@ -1089,7 +1089,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
             activeOpacity={1} 
             onPress={() => !rescheduling && setShowRescheduleModal(false)} 
           />
-          <KeyboardAvoidingView style={{ width: '100%' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
           <View style={[styles.rescheduleModalContent, { backgroundColor: theme.bg.card }]}>
             {/* Header */}
             <View style={[styles.modalHeaderRow, { borderBottomColor: theme.border }]}>

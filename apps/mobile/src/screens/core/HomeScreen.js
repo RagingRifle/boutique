@@ -952,6 +952,7 @@ export default function HomeScreen({ navigation }) {
           setShowAddressModal(false);
         }}
       >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={styles.addressModalOverlay}>
           <TouchableOpacity 
             style={styles.addressModalCloseArea} 
@@ -981,10 +982,12 @@ export default function HomeScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
+            <ScrollView
+              style={{ flex: 1 }}
               showsVerticalScrollIndicator={false} 
               contentContainerStyle={styles.addressModalScroll}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             >
               {isAddingNewAddress ? (
                 /* ADD NEW ADDRESS FORM */
@@ -1297,6 +1300,7 @@ export default function HomeScreen({ navigation }) {
             </ScrollView>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
@@ -2486,7 +2490,8 @@ const styles = StyleSheet.create({
   addressModalSheet: {
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    maxHeight: '80%',
+    height: '80%',
+    maxHeight: '90%',
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
   addressModalHandle: {

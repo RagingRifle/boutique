@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   Modal,
+  KeyboardAvoidingView,
   Platform,
   Dimensions
 } from 'react-native';
@@ -269,6 +270,7 @@ export default function AddressSelector({
         setIsAddingNewAddress(false);
       }}
     >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
       <View style={styles.modalOverlay}>
         <TouchableOpacity
           style={styles.modalOverlayDismiss}
@@ -295,7 +297,7 @@ export default function AddressSelector({
           </View>
 
           {isAddingNewAddress ? (
-            <ScrollView style={styles.addAddressFormScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.addAddressFormScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
               <View style={styles.addAddressForm}>
                 <View style={styles.formSection}>
                   <View style={styles.formSectionHeader}>
@@ -472,7 +474,7 @@ export default function AddressSelector({
               </View>
             </ScrollView>
           ) : (
-            <ScrollView style={styles.addressListScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.addressListScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.modalAddNewBtn, { backgroundColor: theme.brand[50], borderColor: theme.brand[200] }]}
                 activeOpacity={0.7}
@@ -575,6 +577,7 @@ export default function AddressSelector({
           )}
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -599,7 +602,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    maxHeight: '85%',
+    height: '85%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -617,6 +621,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   addAddressFormScroll: {
+    flex: 1,
     marginTop: 12,
   },
   addAddressForm: {
@@ -738,6 +743,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   addressListScroll: {
+    flex: 1,
     marginTop: 16,
   },
   modalAddNewBtn: {

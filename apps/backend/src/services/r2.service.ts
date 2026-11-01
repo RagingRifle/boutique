@@ -26,7 +26,7 @@ export class R2Service {
   /**
    * Uploads a file buffer to Cloudflare R2. Falls back to local storage if R2 is not configured.
    */
-  static async uploadFile(buffer: Buffer, key: string, mimeType: string): Promise<string> {
+  static async uploadFile(buffer: Buffer, key: string, mimeType: string, publicBaseUrl?: string): Promise<string> {
     if (s3Client && env.CLOUDFLARE_R2_BUCKET) {
       try {
         const command = new PutObjectCommand({
@@ -53,7 +53,8 @@ export class R2Service {
       const filePath = path.join(uploadsDir, fileName);
       await fs.promises.writeFile(filePath, buffer);
       
-      return `http://localhost:${env.PORT}/uploads/${fileName}`;
+      const baseUrl = (publicBaseUrl || env.PUBLIC_API_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
+      return `${baseUrl}/uploads/${encodeURIComponent(fileName)}`;
     } catch (error: any) {
       logger.error('Local file upload fallback failed', { metadata: { error: error.message } });
       throw error;

@@ -11,6 +11,7 @@ import {
   Linking,
   ScrollView,
   Modal,
+  KeyboardAvoidingView,
   Platform,
   StatusBar,
   Dimensions,
@@ -415,6 +416,7 @@ export default function SupportTicketScreen({ navigation }) {
         visible={createModalVisible}
         onRequestClose={handleCloseModal}
       >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={styles.modalBg}>
           <View style={[styles.modalCard, shadows.premium, { backgroundColor: theme.bg.card }]}>
             <View style={styles.modalHeader}>
@@ -427,7 +429,7 @@ export default function SupportTicketScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { fontFamily: fonts.bold, color: theme.text.primary }]}>SUBJECT</Text>
                 <TextInput
@@ -546,6 +548,7 @@ export default function SupportTicketScreen({ navigation }) {
             </ScrollView>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -788,7 +791,8 @@ const styles = StyleSheet.create({
   modalCard: {
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    maxHeight: '85%',
+    height: '85%',
+    maxHeight: '90%',
     padding: 24,
   },
   modalHeader: {

@@ -814,7 +814,7 @@ export default function AccountDetailsScreen({ navigation }) {
       <Modal visible={editingEmail} transparent animationType="slide" onRequestClose={handleCloseEmailModal}>
         <KeyboardAvoidingView 
           style={styles.modalOverlay} 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <TouchableOpacity 
             style={StyleSheet.absoluteFill} 
@@ -945,7 +945,7 @@ export default function AccountDetailsScreen({ navigation }) {
       <Modal visible={editingPhone} transparent animationType="slide" onRequestClose={handleClosePhoneModal}>
         <KeyboardAvoidingView 
           style={styles.modalOverlay} 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <TouchableOpacity 
             style={StyleSheet.absoluteFill} 
