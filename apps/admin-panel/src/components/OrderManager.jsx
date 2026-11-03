@@ -347,6 +347,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [measurementPrompt, setMeasurementPrompt] = useState(null);
   const [pendingStatusChange, setPendingStatusChange] = useState(null); // { orderId, invoiceNumber, from, to }
   const [proposeDateOrderId, setProposeDateOrderId] = useState(null);
   const [proposedDateVal, setProposedDateVal] = useState('');
@@ -417,6 +418,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
   const [selectedProfileId, setSelectedProfileId] = useState('none');
   const [newProfileName, setNewProfileName] = useState('');
   const [isCreatingNewProfile, setIsCreatingNewProfile] = useState(false);
+  const [measurementEditorMode, setMeasurementEditorMode] = useState('existing');
 
   useEffect(() => {
     if (selectedOrder) {
@@ -474,31 +476,15 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
               }
             }
 
-            // Otherwise, if order has no linked profile but the user has profiles, select the first profile
-            if (profiles && profiles.length > 0) {
-              const mainProfile = profiles[0];
-              setSelectedProfileId(mainProfile.id);
-              setEditMeasurements({
-                fullLength: mainProfile.fullLength || '',
-                shoulderWidth: mainProfile.shoulderWidth || '',
-                upperChest: mainProfile.upperChest || '',
-                bust: mainProfile.bust || '',
-                waist: mainProfile.waist || '',
-                hip: mainProfile.hip || '',
-                armLength: mainProfile.armLength || '',
-                sleeveLength: mainProfile.sleeveLength || '',
-                neck: mainProfile.neck || '',
-                skirtLength: mainProfile.skirtLength || '',
-                pantLength: mainProfile.pantLength || '',
-              });
-            } else {
-              setSelectedProfileId('none');
-              setEditMeasurements({
-                fullLength: '', shoulderWidth: '', upperChest: '', bust: '',
-                waist: '', hip: '', armLength: '', sleeveLength: '',
-                neck: '', skirtLength: '', pantLength: ''
-              });
-            }
+            // Do not silently attach a customer's first profile. Require an
+            // explicit selection so existing measurements are never assigned
+            // to the wrong order by accident.
+            setSelectedProfileId('none');
+            setEditMeasurements({
+              fullLength: '', shoulderWidth: '', upperChest: '', bust: '',
+              waist: '', hip: '', armLength: '', sleeveLength: '',
+              neck: '', skirtLength: '', pantLength: ''
+            });
           })
           .catch(err => console.error('Error fetching measurements:', err));
       } else {
@@ -510,7 +496,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
           neck: '', skirtLength: '', pantLength: ''
         });
       }
-      setIsCreatingNewProfile(false);
+      setIsCreatingNewProfile(measurementEditorMode === 'new');
       setNewProfileName('');
 
       if (selectedOrder.booking) {
@@ -530,7 +516,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       }
       setRescheduleReason('');
     }
-  }, [selectedOrder]);
+  }, [selectedOrder, measurementEditorMode]);
 
   // Admin Rescheduling states
   const [adminRescheduleBooking, setAdminRescheduleBooking] = useState(null);
@@ -1526,8 +1512,18 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
     }
   };
 
+  const openOrderMeasurementEditor = (order, mode = 'existing') => {
+    setMeasurementPrompt(null);
+    setMeasurementEditorMode(mode);
+    setSelectedOrder(order);
+    window.setTimeout(() => {
+      document.getElementById('order-measurement-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+  };
+
   const handleUpdateStatus = async (id, status, e) => {
     if (e) e.stopPropagation();
+    const orderBeforeUpdate = orders.find(order => order.id === id);
     try {
       // Optimistic update to immediately reflect in UI
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
@@ -1536,9 +1532,16 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       }
       await api.updateOrderStatus(id, status);
       await loadOrders(true);
+      if (status === 'PAID' && orderBeforeUpdate?.status === 'PENDING') {
+        setMeasurementPrompt({ order: orderBeforeUpdate, reason: 'phase-entry' });
+      }
     } catch (err) {
       console.error('Failed to update status:', err);
-      alert(err.message || 'Status update failed.');
+      if (status === 'PROCESSING' && /measurement|stitching/i.test(err.message || '')) {
+        setMeasurementPrompt({ order: orderBeforeUpdate, reason: orderBeforeUpdate?.status === 'PENDING' ? 'phase-skipped' : 'blocked' });
+      } else {
+        alert(err.message || 'Status update failed.');
+      }
       loadOrders(true);
     }
   };
@@ -1589,14 +1592,13 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
   const stageStatusChange = (order, newStatus) => {
     if (order.status === newStatus) return;
     if (newStatus === 'PROCESSING') {
+      if (order.status === 'PENDING') {
+        setMeasurementPrompt({ order, reason: 'phase-skipped' });
+        return;
+      }
       const itemsHaveMeasurements = (order.items || []).length > 0 && order.items.every(item => item.measurementProfileId || order.measurementProfileId);
       if (!itemsHaveMeasurements) {
-        setSelectedOrder(order);
-        setPendingStatusChange(null);
-        window.setTimeout(() => {
-          document.getElementById('order-measurement-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 250);
-        alert('Add or select a measurement profile and save the order before moving it to stitching.');
+        setMeasurementPrompt({ order, reason: 'blocked' });
         return;
       }
     }
@@ -1897,6 +1899,11 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       let finalProfileId = selectedProfileId;
       
       if (isCreatingNewProfile) {
+        const enteredDimensionCount = Object.values(editMeasurements).filter(value => Number(value) > 0).length;
+        if (enteredDimensionCount < 3) {
+          alert('Enter at least three measurement dimensions before saving this profile.');
+          return;
+        }
         if (!newProfileName.trim()) {
           alert('Please enter a name for the new profile.');
           return;
@@ -1919,22 +1926,6 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
           tailorNotes: editTailorNotes
         });
         finalProfileId = newProfile.id;
-      } else if (selectedProfileId && selectedProfileId !== 'none') {
-        // Update existing profile
-        await api.updateMeasurements(selectedProfileId, {
-          fullLength: Number(editMeasurements.fullLength),
-          shoulderWidth: Number(editMeasurements.shoulderWidth),
-          upperChest: Number(editMeasurements.upperChest),
-          bust: Number(editMeasurements.bust),
-          waist: Number(editMeasurements.waist),
-          hip: Number(editMeasurements.hip),
-          armLength: Number(editMeasurements.armLength),
-          sleeveLength: Number(editMeasurements.sleeveLength),
-          neck: Number(editMeasurements.neck),
-          skirtLength: Number(editMeasurements.skirtLength),
-          pantLength: Number(editMeasurements.pantLength),
-          tailorNotes: editTailorNotes
-        });
       }
 
       const updates = {
@@ -1979,8 +1970,15 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
         booking: prev?.booking || null
       }));
       loadOrders();
+      if (selectedOrder.status === 'PENDING' && editOrderStatus === 'PAID') {
+        setMeasurementPrompt({ order: { ...selectedOrder, ...updatedOrder }, reason: 'phase-entry' });
+      }
     } catch (err) {
-      alert(err.message || 'Failed to save order changes.');
+      if (editOrderStatus === 'PROCESSING' && /measurement|stitching/i.test(err.message || '')) {
+        setMeasurementPrompt({ order: selectedOrder, reason: selectedOrder.status === 'PENDING' ? 'phase-skipped' : 'blocked' });
+      } else {
+        alert(err.message || 'Failed to save order changes.');
+      }
     }
   };
 
@@ -4136,6 +4134,9 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                           />
                         </div>
                       )}
+                      {selectedProfileId !== 'none' && !isCreatingNewProfile && (
+                        <p className="text-[10px] text-slate-500">This saved customer profile will be linked to the order as-is. Choose “Create New Profile” to record different measurements without changing the existing profile.</p>
+                      )}
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {[
                           { key: 'bust', label: 'Bust Size' },
@@ -4156,11 +4157,12 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                               type="number"
                               step="0.1"
                               value={editMeasurements[dim.key] || ''}
+                              disabled={!isCreatingNewProfile}
                               onChange={e => setEditMeasurements({
                                 ...editMeasurements,
                                 [dim.key]: e.target.value
                               })}
-                              className="w-full font-bold text-slate-750 bg-white border border-slate-200 rounded-lg p-1 text-xs focus:outline-none focus:border-brand-500 mt-1"
+                              className="w-full font-bold text-slate-750 bg-white border border-slate-200 rounded-lg p-1 text-xs focus:outline-none focus:border-brand-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed mt-1"
                             />
                           </div>
                         ))}
@@ -4817,6 +4819,48 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                 Send Proposal
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {measurementPrompt && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div>
+              <h3 className="text-base font-black text-slate-900">
+                {measurementPrompt.reason === 'phase-entry' ? 'Measurement session started' : 'Measurement not assigned'}
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">
+                {measurementPrompt.reason === 'phase-skipped'
+                  ? 'This order must pass through Measurement Session before stitching. Record or assign the customer’s measurements now.'
+                  : measurementPrompt.reason === 'phase-entry'
+                    ? 'Record new measurements or assign an existing customer profile to this order before stitching.'
+                    : 'This order cannot move to stitching until a measurement profile with at least three recorded dimensions is assigned.'}
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => openOrderMeasurementEditor(measurementPrompt.order, 'existing')}
+                className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Assign Existing Measurement
+              </button>
+              <button
+                type="button"
+                onClick={() => openOrderMeasurementEditor(measurementPrompt.order, 'new')}
+                className="flex-1 rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800"
+              >
+                Record New Measurement
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMeasurementPrompt(null)}
+              className="w-full rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+            >
+              Later
+            </button>
           </div>
         </div>
       )}

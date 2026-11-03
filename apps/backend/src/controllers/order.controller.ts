@@ -512,6 +512,10 @@ export class OrderController {
         return res.status(404).json({ success: false, message: 'Order not found' });
       }
 
+      if (!existing.isQuickOrder && status === 'PROCESSING' && existing.status === 'PENDING') {
+        return res.status(400).json({ success: false, message: 'Complete the Measurement Session before moving this order to stitching.' });
+      }
+
       const existingItems = await prisma.orderItem.findMany({ where: { orderId: id }, select: { id: true, measurementProfileId: true } });
       const itemAssignments = Array.isArray(req.body.orderItemMeasurements) ? req.body.orderItemMeasurements : [];
       const submittedAssignments = new Map(itemAssignments.map((assignment: any) => [assignment.orderItemId, assignment.measurementProfileId]));
