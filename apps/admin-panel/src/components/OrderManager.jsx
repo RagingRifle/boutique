@@ -283,6 +283,7 @@ function parseUserAddress(user) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function OrderManager({ initialTab = 'bookings', isActive }) {
   const [orders, setOrders] = useState([]);
+  const [ordersLoadError, setOrdersLoadError] = useState('');
   const [appointments, setAppointments] = useState([]);
   const [visits, setVisits] = useState([]);
   const [staffList, setStaffList] = useState([]);
@@ -1038,8 +1039,9 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
 
   const loadOrders = async (quiet = false) => {
     try {
+      setOrdersLoadError('');
       const [list, appList, visitList, staff] = await Promise.all([
-        api.getOrders().catch(() => []),
+        api.getOrders(),
         api.getAppointments().catch(() => []),
         api.getStoreVisits().catch(() => []),
         api.getStaffList().catch(() => []),
@@ -1091,6 +1093,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       window.dispatchEvent(new Event('sidebar_badge_refresh'));
     } catch (err) {
       console.error(err);
+      setOrdersLoadError(err.message || 'Could not load orders. Check the API/database connection and try again.');
     }
   };
 
@@ -1585,6 +1588,18 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
   // Stage a status change — opens the two-step confirmation dialog
   const stageStatusChange = (order, newStatus) => {
     if (order.status === newStatus) return;
+    if (newStatus === 'PROCESSING') {
+      const itemsHaveMeasurements = (order.items || []).length > 0 && order.items.every(item => item.measurementProfileId || order.measurementProfileId);
+      if (!itemsHaveMeasurements) {
+        setSelectedOrder(order);
+        setPendingStatusChange(null);
+        window.setTimeout(() => {
+          document.getElementById('order-measurement-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 250);
+        alert('Add or select a measurement profile and save the order before moving it to stitching.');
+        return;
+      }
+    }
     const fromCfg = getStageConfig(order.status);
     const toCfg = getStageConfig(newStatus);
     setPendingStatusChange({
@@ -2722,7 +2737,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {paginatedOrders.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="py-12 text-center text-slate-400 font-bold">No orders found.</td>
+                      <td colSpan="7" className="py-12 text-center text-slate-400 font-bold">{ordersLoadError || 'No orders found.'}</td>
                     </tr>
                   ) : (
                     paginatedOrders.map((order) => (
@@ -4050,7 +4065,7 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                     </div>
 
                     {/* Sizing Dimensions Sheet */}
-                    <div className="space-y-3 pt-3 border-t border-slate-100">
+                    <div id="order-measurement-section" className="space-y-3 pt-3 border-t border-slate-100">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <label className="text-[10px] font-bold text-slate-450 uppercase flex items-center gap-1">
                           <Ruler className="w-3.5 h-3.5 text-brand-500" />

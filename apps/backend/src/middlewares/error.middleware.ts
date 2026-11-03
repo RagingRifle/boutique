@@ -25,20 +25,23 @@ export function errorMiddleware(
   });
 
   let cleanMessage = message;
+  // Prisma error codes are safe to expose and identify the failure class (for
+  // example P2002 = unique constraint, P2021 = missing table). The full error
+  // remains in server logs; never send SQL or Prisma metadata to production.
+  const prismaCode = /^P\d{4}$/.test(String((err as any).code || ''))
+    ? String((err as any).code)
+    : undefined;
 
   if (isProduction) {
     if (statusCode === 500) {
       cleanMessage = 'Internal Server Error';
-    }
-    // Filter out detailed Prisma/SQL errors
-    if (err.name?.startsWith('Prisma') || err.message?.includes('prisma') || err.message?.includes('Database')) {
-      cleanMessage = 'A database conflict or constraint occurred. Access denied.';
     }
   }
 
   res.status(statusCode).json({
     success: false,
     message: cleanMessage,
+    ...(isProduction && prismaCode && { code: prismaCode }),
     ...(!isProduction && { stack: err.stack }),
     ...(!isProduction && err.details && { details: err.details }),
   });

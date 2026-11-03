@@ -514,22 +514,62 @@ export class OrderController {
 
       const existingItems = await prisma.orderItem.findMany({ where: { orderId: id }, select: { id: true, measurementProfileId: true } });
       const itemAssignments = Array.isArray(req.body.orderItemMeasurements) ? req.body.orderItemMeasurements : [];
+      const submittedAssignments = new Map(itemAssignments.map((assignment: any) => [assignment.orderItemId, assignment.measurementProfileId]));
+      const orderProfileId = measurementProfileId !== undefined ? measurementProfileId : existing.measurementProfileId;
       if (itemAssignments.length) {
         const itemIds = new Set(existingItems.map(item => item.id));
         if (itemAssignments.some((assignment: any) => !itemIds.has(assignment.orderItemId))) {
           return res.status(400).json({ success: false, message: 'A product in the measurement assignment does not belong to this order.' });
         }
-        const profileIds = [...new Set(itemAssignments.map((assignment: any) => assignment.measurementProfileId).filter(Boolean))] as string[];
-        const profiles = profileIds.length ? await prisma.measurementProfile.findMany({ where: { id: { in: profileIds } }, select: { id: true, userId: true } }) : [];
-        if (profiles.length !== profileIds.length || (existing.userId && profiles.some(profile => profile.userId !== existing.userId))) {
-          return res.status(400).json({ success: false, message: 'Choose a measurement profile that belongs to this customer.' });
-        }
       }
       if (status === 'PROCESSING') {
-        const submitted = new Map(itemAssignments.map((assignment: any) => [assignment.orderItemId, assignment.measurementProfileId]));
-        const unassigned = existingItems.filter(item => !(submitted.has(item.id) ? submitted.get(item.id) : item.measurementProfileId));
+        // A profile saved on the order is the default for its products. The
+        // admin UI assigns a single customer profile to the order, so requiring
+        // per-item assignments here made that workflow impossible to complete.
+        const unassigned = existingItems.filter(item => {
+          const submittedProfileId = submittedAssignments.has(item.id) ? submittedAssignments.get(item.id) : item.measurementProfileId;
+          return !(submittedProfileId || orderProfileId);
+        });
         if (unassigned.length) {
           return res.status(400).json({ success: false, message: 'Add or assign a measurement profile to every product in this order before moving it to stitching.' });
+        }
+      }
+
+      const profileIdsToValidate = [...new Set([
+        ...itemAssignments.map((assignment: any) => assignment.measurementProfileId),
+        ...(orderProfileId ? [orderProfileId] : []),
+        ...(status === 'PROCESSING' ? existingItems.map(item => item.measurementProfileId) : []),
+      ].filter(Boolean))] as string[];
+      const profilesToValidate = profileIdsToValidate.length
+        ? await prisma.measurementProfile.findMany({
+            where: { id: { in: profileIdsToValidate } },
+            select: {
+              id: true, userId: true, fullLength: true, shoulderWidth: true,
+              upperChest: true, bust: true, waist: true, hip: true,
+              armLength: true, sleeveLength: true, neck: true, seat: true,
+              skirtLength: true, pantLength: true, customMeasurements: true,
+            },
+          })
+        : [];
+      if (profilesToValidate.length !== profileIdsToValidate.length || (existing.userId && profilesToValidate.some(profile => profile.userId !== existing.userId))) {
+        return res.status(400).json({ success: false, message: 'Choose a measurement profile that belongs to this customer.' });
+      }
+      if (status === 'PROCESSING') {
+        const profilesById = new Map(profilesToValidate.map(profile => [profile.id, profile]));
+        const missingMeasurements = existingItems.some(item => {
+          const submittedProfileId = submittedAssignments.has(item.id) ? submittedAssignments.get(item.id) : item.measurementProfileId;
+          const profileId = submittedProfileId || orderProfileId;
+          const profile = profileId ? profilesById.get(profileId) : null;
+          if (!profile) return true;
+          const numericFields = [profile.fullLength, profile.shoulderWidth, profile.upperChest, profile.bust, profile.waist, profile.hip, profile.armLength, profile.sleeveLength, profile.neck, profile.seat, profile.skirtLength, profile.pantLength];
+          const numericMeasurementCount = numericFields.filter(value => value !== null && value !== undefined && Number(value) > 0).length;
+          const customMeasurementCount = Array.isArray(profile.customMeasurements)
+            ? profile.customMeasurements.filter((value: any) => String(value?.value || '').trim().length > 0).length
+            : 0;
+          return numericMeasurementCount + customMeasurementCount < 3;
+        });
+        if (missingMeasurements) {
+          return res.status(400).json({ success: false, message: 'Record at least three dimensions or custom measurements in the assigned profile before moving this order to stitching.' });
         }
       }
 
@@ -596,8 +636,18 @@ export class OrderController {
       // Do not auto-set paymentStatus to REFUNDED. Admin manually marks as REFUNDED.
 
       const order = await prisma.$transaction(async (tx: any) => {
-        for (const assignment of itemAssignments) {
-          await tx.orderItem.update({ where: { id: assignment.orderItemId }, data: { measurementProfileId: assignment.measurementProfileId } });
+        if (status === 'PROCESSING') {
+          for (const item of existingItems) {
+            const submittedProfileId = submittedAssignments.has(item.id) ? submittedAssignments.get(item.id) : item.measurementProfileId;
+            const profileId = submittedProfileId || orderProfileId;
+            if (profileId !== item.measurementProfileId) {
+              await tx.orderItem.update({ where: { id: item.id }, data: { measurementProfileId: profileId } });
+            }
+          }
+        } else {
+          for (const assignment of itemAssignments) {
+            await tx.orderItem.update({ where: { id: assignment.orderItemId }, data: { measurementProfileId: assignment.measurementProfileId } });
+          }
         }
         return tx.order.update({
         where: { id },

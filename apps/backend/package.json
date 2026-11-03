@@ -4,7 +4,9 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "prisma generate && tsc",
-    "start": "prisma db push && node run_full_seed.js && node dist/create_sanjai_user.js && node dist/reset_admin.js && node dist/index.js",
+    "start": "node dist/index.js",
+    "db:sync": "prisma db push",
+    "seed:demo": "node run_full_seed.js",
     "start:pm2": "pm2 start dist/index.js --name marcos-backend --attach",
     "dev": "nodemon --watch src -e ts --exec ts-node src/index.ts",
     "reset:admin": "ts-node src/reset_admin.ts",

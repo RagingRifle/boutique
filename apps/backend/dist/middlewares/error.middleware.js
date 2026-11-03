@@ -17,18 +17,19 @@ function errorMiddleware(err, req, res, next) {
         },
     });
     let cleanMessage = message;
+    // Prisma codes identify the failure class without exposing SQL or metadata.
+    const prismaCode = /^P\d{4}$/.test(String(err.code || ''))
+        ? String(err.code)
+        : undefined;
     if (environment_js_1.isProduction) {
         if (statusCode === 500) {
             cleanMessage = 'Internal Server Error';
-        }
-        // Filter out detailed Prisma/SQL errors
-        if (err.name?.startsWith('Prisma') || err.message?.includes('prisma') || err.message?.includes('Database')) {
-            cleanMessage = 'A database conflict or constraint occurred. Access denied.';
         }
     }
     res.status(statusCode).json({
         success: false,
         message: cleanMessage,
+        ...(environment_js_1.isProduction && prismaCode && { code: prismaCode }),
         ...(!environment_js_1.isProduction && { stack: err.stack }),
         ...(!environment_js_1.isProduction && err.details && { details: err.details }),
     });
