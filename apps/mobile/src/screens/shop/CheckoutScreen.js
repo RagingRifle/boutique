@@ -783,7 +783,7 @@ export default function CheckoutScreen({ route, navigation }) {
 
     return (
       <View style={{ flex: 1 }}>
-        <ScrollView style={styles.stepScroll} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.stepScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
 
           <Text style={[styles.sectionHeading, { fontFamily: fonts.bold, color: theme.text.primary }]}>
             Select Fitting Option
@@ -988,7 +988,7 @@ export default function CheckoutScreen({ route, navigation }) {
     const address = getSelectedAddress();
     return (
       <View style={{ flex: 1 }}>
-        <ScrollView style={styles.stepScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView style={styles.stepScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
 
           {/* Deliver Address Miniature */}
           {!address ? (

@@ -5,6 +5,7 @@ import { Role, AppointmentStatus, AppointmentType } from '@prisma/client';
 import { getIO } from '../socket/socket.handler.js';
 import { createAuditLog } from '../utils/audit.js';
 import redis from '../config/redis.js';
+import JobsProducer from '../queues/jobs.producer.js';
 
 export const appointmentCreateSchema = z.object({
   body: z.object({
@@ -24,6 +25,7 @@ export const appointmentUpdateSchema = z.object({
   body: z.object({
     date: z.string().datetime().optional(),
     timeSlot: z.string().min(1).optional(),
+    productType: z.string().min(1).optional(),
     status: z.enum(['PENDING', 'CONFIRMED', 'CANCELLED', 'RESCHEDULED', 'CONSULTED', 'ORDERED']).optional(),
     notes: z.string().optional(),
     orderId: z.string().uuid().optional().nullable(),
@@ -324,7 +326,7 @@ export class AppointmentController {
   static async updateAppointment(req: Request, res: Response, next: NextFunction) {
     const user = req.user!;
     const { id } = req.params;
-    const { date, timeSlot, status, notes, orderId, assignedStaffId } = req.body;
+    const { date, timeSlot, productType, status, notes, orderId, assignedStaffId } = req.body;
 
     let lockKey: string | null = null;
     let lockAcquired = false;
@@ -341,6 +343,10 @@ export class AppointmentController {
       // Check ownership
       if (appointment.userId !== user.id && user.role === Role.CUSTOMER) {
         return res.status(403).json({ success: false, message: 'Forbidden: You do not own this booking' });
+      }
+
+      if (productType !== undefined && user.role === Role.CUSTOMER) {
+        return res.status(403).json({ success: false, message: 'Only staff can update consultation product details.' });
       }
 
       if (assignedStaffId !== undefined) {
@@ -420,6 +426,7 @@ export class AppointmentController {
         data: {
           ...(date && { date: new Date(date) }),
           ...(timeSlot && { timeSlot }),
+          ...(productType && { productType }),
           ...(status && { status: status as AppointmentStatus }),
           ...(notes !== undefined && { notes }),
           ...(orderId !== undefined && { orderId }),
@@ -430,6 +437,42 @@ export class AppointmentController {
 
       if (lockAcquired && lockKey) {
         await redis.del(lockKey);
+      }
+
+      const consultationDetailsChanged = user.role !== Role.CUSTOMER && Boolean(appointment.userId) && (
+        (productType !== undefined && productType !== appointment.productType) ||
+        (notes !== undefined && notes !== appointment.notes)
+      );
+      if (consultationDetailsChanged && appointment.userId) {
+        const title = 'Consultation details updated';
+        const body = `Your consultation details have changed. Open Bookings in the MARCOS app to review your category, product, and add-ons.`;
+        try {
+          const notification = await prisma.notification.create({
+            data: { title, body, type: 'APPOINTMENT_REMINDER' },
+          });
+          await prisma.notificationRecipient.create({
+            data: { notificationId: notification.id, userId: appointment.userId },
+          });
+          getIO()?.to(`user:${appointment.userId}`).emit('appointment:details_updated', {
+            appointmentId: updated.id,
+            productType: updated.productType,
+            notes: updated.notes,
+            updatedAt: updated.updatedAt,
+          });
+          getIO()?.to(`user:${appointment.userId}`).emit('notification:received', {
+            id: notification.id,
+            title,
+            body,
+            createdAt: notification.createdAt,
+          });
+          await JobsProducer.queueNotification({
+            userId: appointment.userId,
+            channels: ['PUSH'],
+            templates: { push: { title, body } },
+          }).catch(error => console.error('Unable to queue consultation update notification:', error));
+        } catch (notificationError) {
+          console.error('Unable to save consultation update notification:', notificationError);
+        }
       }
 
       if ((status === 'CANCELLED' || status === AppointmentStatus.CANCELLED) && user.role !== Role.CUSTOMER) {

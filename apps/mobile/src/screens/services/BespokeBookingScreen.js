@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
   Platform,
   Dimensions,
   Image
@@ -372,6 +373,11 @@ export default function BespokeBookingScreen({ navigation, route }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg.main }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
       {/* Header */}
       <View style={[styles.header, { borderColor: theme.border }]}>
         <TouchableOpacity 
@@ -387,7 +393,12 @@ export default function BespokeBookingScreen({ navigation, route }) {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 32 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+      >
         {/* Product Preview Card */}
         <View style={[styles.productCard, shadows.premium, { backgroundColor: theme.bg.card }]}>
           <Image source={{ uri: prefillProductImage || 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=300' }} style={styles.productImage} />
@@ -670,6 +681,7 @@ export default function BespokeBookingScreen({ navigation, route }) {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Saved Addresses Selector Modal */}
       <Modal visible={showAddressModal} transparent animationType="slide">

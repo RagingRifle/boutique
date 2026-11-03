@@ -8,6 +8,7 @@ import {
   ActivityIndicator, 
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
   Modal,
   TextInput,
   ScrollView,
@@ -16,11 +17,13 @@ import {
   Dimensions,
   StatusBar,
   Image,
-  RefreshControl
+  RefreshControl,
+  findNodeHandle
 } from 'react-native';
 import { useTheme } from '../../styles/ThemeContext';
 import { APP_CONFIG } from '../../config/app.config';
 import api from '../../utils/api';
+import { getSocket } from '../../utils/socket';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Calendar, 
@@ -82,6 +85,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
+  const [bookingKeyboardHeight, setBookingKeyboardHeight] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [productImage, setProductImage] = useState('');
   const { requireAuth, user } = useAuth();
@@ -113,6 +117,22 @@ export default function AppointmentBookingScreen({ navigation, route }) {
   
   // Form states
   const [apptCategory, setApptCategory] = useState('');
+  const [apptSubcategory, setApptSubcategory] = useState('');
+  const [selectedMainCategoryId, setSelectedMainCategoryId] = useState('');
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [bookingCategories, setBookingCategories] = useState([]);
+  const [bookingProducts, setBookingProducts] = useState([]);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [subcategoryPickerOpen, setSubcategoryPickerOpen] = useState(false);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [isCustomProduct, setIsCustomProduct] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedProductData, setSelectedProductData] = useState(null);
+  const [selectedAddons, setSelectedAddons] = useState({});
   const [timeSlot, setTimeSlot] = useState('');
   const [productDetails, setProductDetails] = useState('');
   const [notes, setNotes] = useState('');
@@ -120,6 +140,126 @@ export default function AppointmentBookingScreen({ navigation, route }) {
   
   // Validation states
   const [errors, setErrors] = useState({});
+  const bookingFormScrollRef = useRef(null);
+  const notesInputRef = useRef(null);
+  const productInputRef = useRef(null);
+  const bookingProductsRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!bookingModalVisible) {
+      setBookingKeyboardHeight(0);
+      return undefined;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardShowSubscription = Keyboard.addListener(showEvent, event => {
+      setBookingKeyboardHeight(Math.max(0, event.endCoordinates?.height || 0));
+    });
+    const keyboardHideSubscription = Keyboard.addListener('keyboardDidHide', () => setBookingKeyboardHeight(0));
+
+    return () => {
+      keyboardShowSubscription.remove();
+      keyboardHideSubscription.remove();
+    };
+  }, [bookingModalVisible]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadBookingCategories = async () => {
+      setLoadingCategories(true);
+      try {
+        const response = await api.get('/categories');
+        if (isMounted && response.success && Array.isArray(response.data)) {
+          setBookingCategories(response.data);
+        }
+      } catch (error) {
+        console.warn('Unable to load booking categories:', error.message);
+      } finally {
+        if (isMounted) setLoadingCategories(false);
+      }
+    };
+    loadBookingCategories();
+    return () => { isMounted = false; };
+  }, []);
+
+  const loadProductsForCategory = async (categoryId) => {
+    if (!categoryId) {
+      bookingProductsRequestRef.current += 1;
+      setBookingProducts([]);
+      setLoadingProducts(false);
+      return;
+    }
+    const requestId = ++bookingProductsRequestRef.current;
+    setLoadingProducts(true);
+    try {
+      const response = await api.get(`/products?categoryId=${encodeURIComponent(categoryId)}&page=1&limit=100`);
+      if (requestId === bookingProductsRequestRef.current) {
+        setBookingProducts(response.success && Array.isArray(response.data) ? response.data : []);
+      }
+    } catch (error) {
+      console.warn('Unable to load products for booking category:', error.message);
+      if (requestId === bookingProductsRequestRef.current) setBookingProducts([]);
+    } finally {
+      if (requestId === bookingProductsRequestRef.current) setLoadingProducts(false);
+    }
+  };
+
+  const selectBookingCategory = (category) => {
+    setApptCategory(category.name);
+    setApptSubcategory('');
+    setSelectedMainCategoryId(category.id);
+    setSelectedSubcategoryId('');
+    setSelectedCategoryId(category.id);
+    setIsCustomCategory(false);
+    setIsCustomProduct(false);
+    setProductDetails('');
+    setProductImage('');
+    setSelectedProductId('');
+    setSelectedProductData(null);
+    setSelectedAddons({});
+    setBookingProducts([]);
+    setProductPickerOpen(false);
+    setSubcategoryPickerOpen(false);
+    setCategoryPickerOpen(false);
+    setErrors(current => ({ ...current, category: undefined, product: undefined }));
+    loadProductsForCategory(category.id);
+  };
+
+  const selectBookingSubcategory = (subcategory) => {
+    setApptSubcategory(subcategory?.name || '');
+    setSelectedSubcategoryId(subcategory?.id || '');
+    const categoryId = subcategory?.id || selectedMainCategoryId;
+    setSelectedCategoryId(categoryId);
+    setProductDetails('');
+    setProductImage('');
+    setSelectedProductId('');
+    setSelectedProductData(null);
+    setSelectedAddons({});
+    setBookingProducts([]);
+    setProductPickerOpen(false);
+    setSubcategoryPickerOpen(false);
+    loadProductsForCategory(categoryId);
+  };
+
+  const selectBookingProduct = async (product) => {
+    setProductDetails(product.name);
+    setProductImage(Array.isArray(product.images) ? product.images[0] || product.bannerImage || '' : product.bannerImage || '');
+    setSelectedProductId(product.id);
+    setSelectedProductData(product);
+    setSelectedAddons({});
+    setIsCustomProduct(false);
+    setProductPickerOpen(false);
+    setErrors(current => ({ ...current, product: undefined }));
+
+    try {
+      const response = await api.get(`/products/${product.id}`);
+      if (response.success && response.data?.id === product.id) {
+        setSelectedProductData(current => current?.id === product.id ? response.data : current);
+      }
+    } catch (error) {
+      console.warn('Unable to load product add-ons for booking:', error.message);
+    }
+  };
 
   // Rescheduling states
   const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
@@ -209,9 +349,18 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       setBookingModalVisible(true);
       if (route.params.prefillProduct) {
         setProductDetails(route.params.prefillProduct);
+        setIsCustomProduct(true);
+        setSelectedProductId('');
+        setSelectedProductData(null);
+        setSelectedAddons({});
       }
       if (route.params.prefillCategory) {
         setApptCategory(route.params.prefillCategory);
+        setApptSubcategory('');
+        setSelectedMainCategoryId('');
+        setSelectedSubcategoryId('');
+        setSelectedCategoryId('');
+        setIsCustomCategory(true);
       }
       if (route.params.prefillProductImage) {
         setProductImage(route.params.prefillProductImage);
@@ -361,6 +510,21 @@ export default function AppointmentBookingScreen({ navigation, route }) {
     setRefreshing(false);
   };
 
+  useEffect(() => {
+    const refreshUpdatedAppointment = () => loadData(true);
+    let socket = null;
+    const interval = setInterval(() => {
+      socket = getSocket();
+      if (!socket) return;
+      clearInterval(interval);
+      socket.on('appointment:details_updated', refreshUpdatedAppointment);
+    }, 1000);
+    return () => {
+      clearInterval(interval);
+      socket?.off('appointment:details_updated', refreshUpdatedAppointment);
+    };
+  }, [user]);
+
   const loadMoreData = async () => {
     if (loadingMore || !user) return;
     
@@ -411,7 +575,6 @@ export default function AppointmentBookingScreen({ navigation, route }) {
     if (activeTab === 'SERVICE') {
       if (!apptCategory.trim()) newErrors.category = 'Category is required';
       if (!timeSlot) newErrors.timeSlot = 'Time slot is required';
-      if (!productDetails.trim()) newErrors.product = 'Details are required';
     } else {
       if (!address.trim()) newErrors.address = 'Address is required';
       if (!notes.trim()) newErrors.notes = 'Requirements are required';
@@ -431,12 +594,27 @@ export default function AppointmentBookingScreen({ navigation, route }) {
         const formattedDate = `${yearVal}-${monthVal}-${dayVal}T12:00:00.000Z`;
         let res;
         if (activeTab === 'SERVICE') {
+          const selectedProduct = selectedProductData?.id === selectedProductId ? selectedProductData : null;
+          const selectedAddonDetails = (selectedProduct?.customizationGroups || []).flatMap(group => {
+            const options = (selectedAddons[group.id] || []).map(optionId => {
+              const option = (group.options || []).find(candidate => candidate.id === optionId);
+              return option ? { name: option.name, price: Number(option.price || 0) } : null;
+            }).filter(Boolean);
+            return options.length ? [{ groupName: group.name, options }] : [];
+          });
+          const appointmentNotes = [
+            `Category: ${apptCategory.trim()}`,
+            apptSubcategory.trim() ? `Subcategory: ${apptSubcategory.trim()}` : '',
+            productImage ? `ProductImage: ${productImage}` : '',
+            selectedAddonDetails.length ? `Add-ons: ${selectedAddonDetails.map(group => `${group.groupName}: ${group.options.map(option => `${option.name}${option.price > 0 ? ` (+₹${option.price.toLocaleString('en-IN')})` : ''}`).join(', ')}`).join('; ')}` : '',
+            notes.trim(),
+          ].filter(Boolean).join('\n');
           res = await api.post('/appointments', {
             date: formattedDate,
             timeSlot,
-            productType: productDetails,
+            productType: productDetails.trim() || apptSubcategory.trim() || apptCategory.trim(),
             type: 'CONSULTATION',
-            notes: `Category: ${apptCategory}\nProductImage: ${productImage || ''}\n${notes}`,
+            notes: appointmentNotes,
           });
         } else {
           res = await api.post('/visits', {
@@ -463,6 +641,19 @@ export default function AppointmentBookingScreen({ navigation, route }) {
   const resetForm = () => {
     setSelectedDate(null);
     setApptCategory('');
+    setApptSubcategory('');
+    setSelectedMainCategoryId('');
+    setSelectedSubcategoryId('');
+    setSelectedCategoryId('');
+    setBookingProducts([]);
+    setCategoryPickerOpen(false);
+    setSubcategoryPickerOpen(false);
+    setProductPickerOpen(false);
+    setIsCustomCategory(false);
+    setIsCustomProduct(false);
+    setSelectedProductId('');
+    setSelectedProductData(null);
+    setSelectedAddons({});
     setTimeSlot('');
     setProductDetails('');
     setProductImage('');
@@ -710,6 +901,28 @@ export default function AppointmentBookingScreen({ navigation, route }) {
 
   const renderBookingItem = ({ item }) => {
     const isVisit = !!item.address;
+    const appointmentNotes = item.notes || '';
+    const categoryMatch = appointmentNotes.match(/(?:^|\n)Category:\s*([^\n]*)/i);
+    const subcategoryMatch = appointmentNotes.match(/(?:^|\n)Subcategory:\s*([^\n]*)/i);
+    const addonMatch = appointmentNotes.match(/(?:^|\n)Add-ons:\s*([^\n]*)/i);
+    const appointmentCategory = [categoryMatch?.[1]?.trim(), subcategoryMatch?.[1]?.trim()].filter(Boolean).join(' / ');
+    let appointmentAddons = addonMatch?.[1]?.trim() || '';
+    if (appointmentAddons) {
+      try {
+        const parsedAddons = JSON.parse(appointmentAddons);
+        appointmentAddons = parsedAddons.flatMap(group => (group.options || []).map(option =>
+          `${group.groupName}: ${option.name}${Number(option.price) > 0 ? ` (+₹${Number(option.price).toLocaleString('en-IN')})` : ''}`
+        )).join(', ');
+      } catch {
+        // Older or admin-entered add-ons can be plain text.
+      }
+    }
+    const customerNotes = appointmentNotes
+      .replace(/(?:^|\n)Category:\s*[^\n]*/gi, '')
+      .replace(/(?:^|\n)Subcategory:\s*[^\n]*/gi, '')
+      .replace(/(?:^|\n)ProductImage:\s*[^\n]*/gi, '')
+      .replace(/(?:^|\n)Add-ons:\s*[^\n]*/gi, '')
+      .trim();
     const dateFormatted = formatBookingDate(isVisit ? item.preferredDate : item.date);
     const dateParts = dateFormatted.split(' ');
     const dayNum = dateParts[0] || '';
@@ -782,12 +995,28 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </Text>
             </View>
 
-            {/* Additional details line if present */}
-            {!isVisit && item.notes && (
+            {/* Keep legacy category/product details visible without changing stored appointments. */}
+            {!isVisit && appointmentCategory && (
               <View style={styles.minimalMetaRow}>
                 <Sparkles size={13} color={theme.brand[500]} />
                 <Text style={[styles.minimalMetaText, { color: theme.text.secondary, fontFamily: fonts.regular }]} numberOfLines={1}>
-                  {item.notes.replace(/ProductImage:[^\n]+/, '').trim() || 'Custom tailoring notes'}
+                  {appointmentCategory}
+                </Text>
+              </View>
+            )}
+            {!isVisit && appointmentAddons && (
+              <View style={styles.minimalMetaRow}>
+                <Sparkles size={13} color={theme.brand[500]} />
+                <Text style={[styles.minimalMetaText, { color: theme.text.secondary, fontFamily: fonts.regular }]} numberOfLines={2}>
+                  Add-ons: {appointmentAddons}
+                </Text>
+              </View>
+            )}
+            {!isVisit && customerNotes && (
+              <View style={styles.minimalMetaRow}>
+                <Sparkles size={13} color={theme.brand[500]} />
+                <Text style={[styles.minimalMetaText, { color: theme.text.secondary, fontFamily: fonts.regular }]} numberOfLines={1}>
+                  {customerNotes}
                 </Text>
               </View>
             )}
@@ -1140,7 +1369,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView ref={bookingFormScrollRef} style={{ flex: 1 }} contentContainerStyle={[styles.sheetScroll, { paddingBottom: 20 + bookingKeyboardHeight }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>DATE</Text>
               <TouchableOpacity 
@@ -1157,29 +1386,182 @@ export default function AppointmentBookingScreen({ navigation, route }) {
 
               {activeTab === 'SERVICE' ? (
                 <>
-                  {productImage ? (
-                    <View style={[styles.prefillPreviewCard, { borderColor: theme.border, backgroundColor: theme.bg.hover }]}>
-                      <Image source={{ uri: productImage }} style={styles.prefillThumb} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: theme.brand[900] }} numberOfLines={1}>{productDetails}</Text>
-                        <Text style={{ fontFamily: fonts.medium, fontSize: 11, color: theme.brand[800] }}>{apptCategory}</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => { setProductImage(''); setProductDetails(''); setApptCategory(''); }}>
-                        <X size={16} color={theme.brand[800]} />
+                  <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>MAIN CATEGORY</Text>
+                  {isCustomCategory ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TextInput
+                        style={[styles.minimalTextInput, { flex: 1, backgroundColor: theme.bg.main, borderColor: errors.category ? '#ef4444' : theme.border, color: theme.brand[900], fontFamily: fonts.regular }]}
+                        placeholder="Enter category"
+                        placeholderTextColor={theme.text.secondary}
+                        value={apptCategory}
+                        onChangeText={value => { setApptCategory(value); setErrors(current => ({ ...current, category: undefined })); }}
+                        returnKeyType="next"
+                        onSubmitEditing={() => productInputRef.current?.focus()}
+                      />
+                      <TouchableOpacity onPress={() => { setIsCustomCategory(false); setIsCustomProduct(false); setApptCategory(''); setApptSubcategory(''); setSelectedMainCategoryId(''); setSelectedSubcategoryId(''); setSelectedCategoryId(''); setBookingProducts([]); setProductDetails(''); setProductImage(''); setSelectedProductId(''); setSelectedProductData(null); setSelectedAddons({}); }}>
+                        <Text style={{ color: theme.brand[700], fontFamily: fonts.semiBold, fontSize: 12 }}>Choose</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
+                    <TouchableOpacity
+                      style={[styles.minimalInputField, { backgroundColor: theme.bg.main, borderColor: errors.category ? '#ef4444' : theme.border }]}
+                      onPress={() => { setCategoryPickerOpen(value => !value); setProductPickerOpen(false); }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.minimalInputText, { color: apptCategory ? theme.brand[900] : theme.text.secondary, fontFamily: fonts.medium }]}>
+                        {loadingCategories ? 'Loading categories…' : (apptCategory || 'Select a category')}
+                      </Text>
+                      {loadingCategories ? <ActivityIndicator size="small" color={theme.brand[700]} /> : <ChevronDown size={18} color={theme.text.secondary} />}
+                    </TouchableOpacity>
+                  )}
+                  {categoryPickerOpen && !isCustomCategory && (
+                    <View style={{ maxHeight: 190, marginTop: 6, borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.bg.card, overflow: 'hidden' }}>
+                      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                        {bookingCategories.map(category => (
+                          <TouchableOpacity
+                            key={category.id}
+                            style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.border }}
+                            onPress={() => selectBookingCategory(category)}
+                          >
+                            <Text style={{ color: theme.brand[900], fontFamily: fonts.medium, fontSize: 13 }}>{category.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {!loadingCategories && bookingCategories.length === 0 && (
+                          <Text style={{ padding: 12, color: theme.text.secondary, fontFamily: fonts.regular, fontSize: 12 }}>No categories are available right now.</Text>
+                        )}
+                        <TouchableOpacity
+                          style={{ paddingHorizontal: 14, paddingVertical: 11 }}
+                          onPress={() => { setIsCustomCategory(true); setIsCustomProduct(true); setCategoryPickerOpen(false); setSelectedMainCategoryId(''); setSelectedSubcategoryId(''); setApptSubcategory(''); setSelectedCategoryId(''); setBookingProducts([]); setProductDetails(''); setProductImage(''); setSelectedProductId(''); setSelectedProductData(null); setSelectedAddons({}); }}
+                        >
+                          <Text style={{ color: theme.brand[700], fontFamily: fonts.semiBold, fontSize: 13 }}>Other category (enter manually)</Text>
+                        </TouchableOpacity>
+                      </ScrollView>
+                    </View>
+                  )}
+                  {errors.category && <Text style={styles.errorTextMinimal}>{errors.category}</Text>}
+
+                  {!!selectedMainCategoryId && !isCustomCategory && (
                     <>
-                      <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>CATEGORY</Text>
-                      <TextInput 
-                        style={[styles.minimalTextInput, { backgroundColor: theme.bg.main, borderColor: errors.category ? '#ef4444' : theme.border, color: theme.brand[900], fontFamily: fonts.regular }]} 
-                        placeholder="E.g. Wedding Couture, Tuxedo Fitting" 
-                        placeholderTextColor={theme.text.secondary} 
-                        value={apptCategory} 
-                        onChangeText={setApptCategory} 
-                      />
-                      {errors.category && <Text style={styles.errorTextMinimal}>{errors.category}</Text>}
+                      <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>SUBCATEGORY (OPTIONAL)</Text>
+                      <TouchableOpacity style={[styles.minimalInputField, { backgroundColor: theme.bg.main, borderColor: theme.border }]}
+                        onPress={() => { setSubcategoryPickerOpen(value => !value); setCategoryPickerOpen(false); setProductPickerOpen(false); }} activeOpacity={0.75}>
+                        <Text style={[styles.minimalInputText, { color: apptSubcategory ? theme.brand[900] : theme.text.secondary, fontFamily: fonts.medium }]}>
+                          {apptSubcategory || 'Skip — main category is enough'}
+                        </Text>
+                        <ChevronDown size={18} color={theme.text.secondary} />
+                      </TouchableOpacity>
+                      {subcategoryPickerOpen && (
+                        <View style={{ maxHeight: 175, marginTop: 6, borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.bg.card, overflow: 'hidden' }}>
+                          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                            <TouchableOpacity style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.border }} onPress={() => selectBookingSubcategory(null)}>
+                              <Text style={{ color: theme.text.secondary, fontFamily: fonts.medium, fontSize: 13 }}>No subcategory — use {apptCategory}</Text>
+                            </TouchableOpacity>
+                            {(bookingCategories.find(category => category.id === selectedMainCategoryId)?.subCategories || []).map(subcategory => (
+                              <TouchableOpacity key={subcategory.id} style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.border }} onPress={() => selectBookingSubcategory(subcategory)}>
+                                <Text style={{ color: theme.brand[900], fontFamily: fonts.medium, fontSize: 13 }}>{subcategory.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                            {(bookingCategories.find(category => category.id === selectedMainCategoryId)?.subCategories || []).length === 0 && (
+                              <Text style={{ padding: 12, color: theme.text.secondary, fontFamily: fonts.regular, fontSize: 12 }}>This category has no subcategories.</Text>
+                            )}
+                          </ScrollView>
+                        </View>
+                      )}
                     </>
+                  )}
+
+                  <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>PRODUCT (OPTIONAL)</Text>
+                  {isCustomProduct ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TextInput
+                        ref={productInputRef}
+                        style={[styles.minimalTextInput, { flex: 1, backgroundColor: theme.bg.main, borderColor: errors.product ? '#ef4444' : theme.border, color: theme.brand[900], fontFamily: fonts.regular }]}
+                        placeholder="Enter product name"
+                        placeholderTextColor={theme.text.secondary}
+                        value={productDetails}
+                        onChangeText={value => { setProductDetails(value); setErrors(current => ({ ...current, product: undefined })); }}
+                        returnKeyType="next"
+                        onSubmitEditing={() => notesInputRef.current?.focus()}
+                      />
+                      <TouchableOpacity onPress={() => { setIsCustomProduct(false); setProductDetails(''); setProductImage(''); setSelectedProductId(''); setSelectedProductData(null); setSelectedAddons({}); }}>
+                        <Text style={{ color: theme.brand[700], fontFamily: fonts.semiBold, fontSize: 12 }}>Choose</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.minimalInputField, { backgroundColor: theme.bg.main, borderColor: errors.product ? '#ef4444' : theme.border, opacity: selectedCategoryId ? 1 : 0.65 }]}
+                      onPress={() => {
+                        if (selectedCategoryId) {
+                          setProductPickerOpen(value => !value);
+                          setCategoryPickerOpen(false);
+                        }
+                      }}
+                      activeOpacity={selectedCategoryId ? 0.75 : 1}
+                    >
+                      <Text style={[styles.minimalInputText, { color: productDetails ? theme.brand[900] : theme.text.secondary, fontFamily: fonts.medium }]}>
+                        {loadingProducts ? 'Loading products…' : (productDetails || (selectedCategoryId ? 'Skip or select a product' : 'Choose a category first'))}
+                      </Text>
+                      {loadingProducts ? <ActivityIndicator size="small" color={theme.brand[700]} /> : <ChevronDown size={18} color={theme.text.secondary} />}
+                    </TouchableOpacity>
+                  )}
+                  {productPickerOpen && !isCustomProduct && (
+                    <View style={{ maxHeight: 190, marginTop: 6, borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.bg.card, overflow: 'hidden' }}>
+                      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                        {bookingProducts.map(product => (
+                          <TouchableOpacity
+                            key={product.id}
+                            style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.border }}
+                            onPress={() => selectBookingProduct(product)}
+                          >
+                            <Text style={{ color: theme.brand[900], fontFamily: fonts.medium, fontSize: 13 }}>{product.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {!loadingProducts && bookingProducts.length === 0 && (
+                          <Text style={{ padding: 12, color: theme.text.secondary, fontFamily: fonts.regular, fontSize: 12 }}>No products found in this category.</Text>
+                        )}
+                        <TouchableOpacity style={{ paddingHorizontal: 14, paddingVertical: 11 }} onPress={() => { setIsCustomProduct(true); setProductPickerOpen(false); setProductDetails(''); setProductImage(''); setSelectedProductId(''); setSelectedProductData(null); setSelectedAddons({}); }}>
+                          <Text style={{ color: theme.brand[700], fontFamily: fonts.semiBold, fontSize: 13 }}>Enter product manually</Text>
+                        </TouchableOpacity>
+                      </ScrollView>
+                    </View>
+                  )}
+                  {errors.product && <Text style={styles.errorTextMinimal}>{errors.product}</Text>}
+                  {productImage ? (
+                    <View style={[styles.prefillPreviewCard, { borderColor: theme.border, backgroundColor: theme.bg.hover, marginTop: 8 }]}>
+                      <Image source={{ uri: productImage }} style={styles.prefillThumb} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: theme.brand[900] }} numberOfLines={1}>{productDetails}</Text>
+                        <Text style={{ fontFamily: fonts.medium, fontSize: 11, color: theme.brand[800] }}>{[apptCategory, apptSubcategory].filter(Boolean).join(' / ')}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {(selectedProductData?.customizationGroups || []).length > 0 && (
+                    <View style={{ marginTop: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg.card }}>
+                      <Text style={{ color: theme.brand[900], fontFamily: fonts.bold, fontSize: 13 }}>ADD-ONS (OPTIONAL)</Text>
+                      <Text style={{ color: theme.text.secondary, fontFamily: fonts.regular, fontSize: 11, marginTop: 3 }}>Choose details you already know. The team can update these later.</Text>
+                      {(selectedProductData?.customizationGroups || []).map(group => (
+                        <View key={group.id} style={{ marginTop: 10 }}>
+                          <Text style={{ color: theme.brand[900], fontFamily: fonts.semiBold, fontSize: 12 }}>{group.name}</Text>
+                          {(group.options || []).map(option => {
+                            const chosen = (selectedAddons[group.id] || []).includes(option.id);
+                            return (
+                              <TouchableOpacity key={option.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}
+                                onPress={() => setSelectedAddons(current => {
+                                  const groupSelection = current[group.id] || [];
+                                  const next = group.selectionType === 'SINGLE'
+                                    ? (chosen ? [] : [option.id])
+                                    : (chosen ? groupSelection.filter(id => id !== option.id) : [...groupSelection, option.id]);
+                                  return { ...current, [group.id]: next };
+                                })}>
+                                <Text style={{ flex: 1, color: theme.text.primary, fontFamily: fonts.medium, fontSize: 12 }}>{chosen ? '✓  ' : '○  '}{option.name}</Text>
+                                <Text style={{ color: Number(option.price) ? theme.brand[700] : theme.text.secondary, fontFamily: fonts.semiBold, fontSize: 11 }}>{Number(option.price) ? `+ ₹${Number(option.price).toLocaleString('en-IN')}` : 'Included'}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
                   )}
 
                   <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>PREFERRED TIME SLOT</Text>
@@ -1220,19 +1602,6 @@ export default function AppointmentBookingScreen({ navigation, route }) {
                   })()}
                   {errors.timeSlot && <Text style={styles.errorTextMinimal}>{errors.timeSlot}</Text>}
 
-                  {!productImage && (
-                    <>
-                      <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>PRODUCT DETAILS</Text>
-                      <TextInput 
-                        style={[styles.minimalTextInput, { backgroundColor: theme.bg.main, borderColor: errors.product ? '#ef4444' : theme.border, color: theme.brand[900], fontFamily: fonts.regular }]} 
-                        placeholder="Product name or code" 
-                        placeholderTextColor={theme.text.secondary} 
-                        value={productDetails} 
-                        onChangeText={setProductDetails} 
-                      />
-                      {errors.product && <Text style={styles.errorTextMinimal}>{errors.product}</Text>}
-                    </>
-                  )}
                 </>
               ) : (
                 <>
@@ -1244,6 +1613,9 @@ export default function AppointmentBookingScreen({ navigation, route }) {
                     multiline 
                     value={address} 
                     onChangeText={setAddress} 
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => notesInputRef.current?.focus()}
                   />
                   {user?.address && address !== user.address && (
                     <TouchableOpacity onPress={() => setAddress(user.address)} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
@@ -1257,12 +1629,19 @@ export default function AppointmentBookingScreen({ navigation, route }) {
 
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>NOTES & REQUIREMENTS</Text>
               <TextInput 
+                ref={notesInputRef}
                 style={[styles.minimalTextInputArea, { backgroundColor: theme.bg.main, borderColor: errors.notes ? '#ef4444' : theme.border, color: theme.brand[900], fontFamily: fonts.regular }]} 
                 placeholder="Specific preferences, measurements, or requests" 
                 placeholderTextColor={theme.text.secondary} 
                 multiline 
                 value={notes} 
                 onChangeText={setNotes} 
+                onFocus={() => setTimeout(() => {
+                  const inputHandle = notesInputRef.current && findNodeHandle(notesInputRef.current);
+                  if (inputHandle) {
+                    bookingFormScrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+                  }
+                }, 350)}
               />
               {errors.notes && <Text style={styles.errorTextMinimal}>{errors.notes}</Text>}
 
@@ -1290,7 +1669,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       {/* Reschedule Modal */}
       <Modal visible={rescheduleModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
           <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card, height: '90%' }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
@@ -1302,7 +1681,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>NEW DATE</Text>
               <TouchableOpacity 
@@ -1384,7 +1763,7 @@ export default function AppointmentBookingScreen({ navigation, route }) {
       {/* Quick Slot Booking Modal */}
       <Modal visible={slotModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <KeyboardAvoidingView style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
           <View style={[styles.bottomSheetCard, { backgroundColor: theme.bg.card, height: '90%' }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
@@ -1396,7 +1775,13 @@ export default function AppointmentBookingScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.sheetScroll}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="none"
+              showsVerticalScrollIndicator={false}
+            >
 
               <Text style={[styles.inputLabel, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>DATE</Text>
               <TouchableOpacity

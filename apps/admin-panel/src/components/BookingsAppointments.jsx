@@ -342,12 +342,20 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
   const [customizations, setCustomizations] = useState('');
   const [tailorNotes, setTailorNotes] = useState('');
   const [apptNotes, setApptNotes] = useState(item?.notes || '');
+  const [apptProductType, setApptProductType] = useState(item?.productType || '');
   const [editingNotes, setEditingNotes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [showNewProfile, setShowNewProfile] = useState(false);
   const [creatingProfile, setCreatingProfile] = useState(false);
+
+  useEffect(() => {
+    if (isAppt) {
+      setApptNotes(item?.notes || '');
+      setApptProductType(item?.productType || '');
+    }
+  }, [isAppt, item?.id, item?.notes, item?.productType]);
 
   // Load customer measurements and linked orders
   useEffect(() => {
@@ -498,7 +506,7 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
   const saveApptNotes = async () => {
     setSaving(true);
     try {
-      if (isAppt) await api.updateAppointment(item.id, { notes: apptNotes });
+      if (isAppt) await api.updateAppointment(item.id, { notes: apptNotes, productType: apptProductType.trim() || item.productType });
       setEditingNotes(false);
       await onRefresh();
     } catch (e) { alert(e.message); }
@@ -542,38 +550,50 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
   const renderParsedNotes = (notes) => {
     if (!notes) return <span className="text-slate-300 italic">No notes added. Click Edit to add.</span>;
 
-    if (notes.includes('ProductImage:') || notes.includes('Category:') || notes.includes('Fitting Address:')) {
-      const categoryMatch = notes.match(/Category:\s*([\s\S]*?)(?=\s*ProductImage:|\s*Fitting Address:|$)/);
-      const imageMatch = notes.match(/ProductImage:\s*(https?:\/\/[^\s]+)/);
-      const fittingMatch = notes.match(/Fitting Address:\s*([\s\S]*?)(?=\s*Category:|\s*ProductImage:|$)/);
-
-      let cleanNotes = notes;
-      if (categoryMatch) cleanNotes = cleanNotes.replace(categoryMatch[0], '');
-      if (imageMatch) cleanNotes = cleanNotes.replace(imageMatch[0], '');
-      if (fittingMatch) cleanNotes = cleanNotes.replace(fittingMatch[0], '');
-      cleanNotes = cleanNotes.trim();
+    if (/^(Category|Subcategory|ProductImage|Add-ons|Fitting Address):/im.test(notes)) {
+      const getLine = (key) => notes.match(new RegExp(`^${key}:\\s*(.*)$`, 'im'))?.[1]?.trim();
+      const category = getLine('Category');
+      const subcategory = getLine('Subcategory');
+      const image = getLine('ProductImage');
+      const fittingAddress = getLine('Fitting Address');
+      const addons = getLine('Add-ons');
+      const cleanNotes = notes.split(/\r?\n/)
+        .filter(line => !/^(Category|Subcategory|ProductImage|Add-ons|Fitting Address):/i.test(line.trim()))
+        .join('\n').trim();
 
       return (
         <div className="space-y-3">
-          {imageMatch && (
+          {image && (
             <div className="w-full h-40 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-              <img src={imageMatch[1]} alt="Product" className="w-full h-full object-cover" />
+              <img src={image} alt="Product" className="w-full h-full object-cover" />
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            {categoryMatch && (
+            {category && (
               <div className="bg-white p-2.5 rounded-xl border border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Product Details</span>
-                <span className="text-sm font-bold text-slate-700 truncate block">{categoryMatch[1].trim()}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Main Category</span>
+                <span className="text-sm font-bold text-slate-700 truncate block">{category}</span>
               </div>
             )}
-            {fittingMatch && (
+            {subcategory && (
+              <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Subcategory</span>
+                <span className="text-sm font-bold text-slate-700 truncate block">{subcategory}</span>
+              </div>
+            )}
+            {fittingAddress && (
               <div className="bg-white p-2.5 rounded-xl border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase block">Fitting Address</span>
-                <span className="text-sm font-bold text-slate-700 truncate block">{fittingMatch[1].trim()}</span>
+                <span className="text-sm font-bold text-slate-700 truncate block">{fittingAddress}</span>
               </div>
             )}
           </div>
+          {addons && (
+            <div className="bg-white p-3 rounded-xl border border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Add-ons</span>
+              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{addons}</p>
+            </div>
+          )}
           {cleanNotes && (
             <div className="bg-white p-3 rounded-xl border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Additional Notes</span>
@@ -675,7 +695,13 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                   ].map(({ label, value }) => (
                     <div key={label} className="bg-white rounded-xl p-3 border border-slate-100">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">{label}</p>
-                      <p className="text-sm font-bold text-slate-700 mt-0.5">{value || '—'}</p>
+                      {isAppt && label === 'Product Type' && editingNotes ? (
+                        <input value={apptProductType} onChange={event => setApptProductType(event.target.value)}
+                          className="mt-1 w-full text-sm font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand-400"
+                          placeholder="Product or category" />
+                      ) : (
+                        <p className="text-sm font-bold text-slate-700 mt-0.5">{value || '—'}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -758,9 +784,12 @@ function DetailDrawer({ appt, visit, orders, staffList, onClose, onRefresh, setA
                   }
                 </div>
                 {editingNotes
-                  ? <textarea value={apptNotes} onChange={e => setApptNotes(e.target.value)} rows={4}
+                  ? <>
+                    <p className="text-[10px] text-slate-400 mb-1">You can update Category, Subcategory, or Add-ons here. Saving sends the updated details to the customer’s app.</p>
+                    <textarea value={apptNotes} onChange={e => setApptNotes(e.target.value)} rows={5}
                     className="w-full text-xs border border-slate-200 rounded-xl p-3 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-100 resize-none bg-white"
-                    placeholder="Add measurement notes, fabric preferences, special instructions..." />
+                    placeholder={'Category: Salwaar\nSubcategory: Anarkali\nAdd-ons: Sleeve finish (+₹150)\nAdditional notes...'} />
+                  </>
                   : <div className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-xl p-3 min-h-[60px] leading-relaxed">
                     {renderParsedNotes(apptNotes)}
                   </div>

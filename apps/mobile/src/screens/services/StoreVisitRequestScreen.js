@@ -279,7 +279,7 @@ export default function StoreVisitRequestScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               {/* Preferred date */}
               <View style={styles.inputContainer}>
                 <Text style={[styles.label, { color: theme.text.secondary, fontFamily: fonts.semiBold }]}>

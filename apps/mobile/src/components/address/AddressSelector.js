@@ -297,7 +297,7 @@ export default function AddressSelector({
           </View>
 
           {isAddingNewAddress ? (
-            <ScrollView style={styles.addAddressFormScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.addAddressFormScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               <View style={styles.addAddressForm}>
                 <View style={styles.formSection}>
                   <View style={styles.formSectionHeader}>
@@ -474,7 +474,7 @@ export default function AddressSelector({
               </View>
             </ScrollView>
           ) : (
-            <ScrollView style={styles.addressListScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.addressListScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.modalAddNewBtn, { backgroundColor: theme.brand[50], borderColor: theme.brand[200] }]}
                 activeOpacity={0.7}

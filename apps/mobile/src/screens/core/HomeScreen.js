@@ -108,7 +108,6 @@ export default function HomeScreen({ navigation }) {
 
   // Consultation Slot Booking States
   const [showSlotBookingModal, setShowSlotBookingModal] = useState(false);
-  const slotBookingScrollRef = useRef(null);
   const [selectedConsultationType] = useState('Master Tailor Consultation');
   const [selectedBookingDateIndex, setSelectedBookingDateIndex] = useState(0);
   const [selectedBookingTime, setSelectedBookingTime] = useState('');
@@ -116,7 +115,7 @@ export default function HomeScreen({ navigation }) {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [bookingNotes, setBookingNotes] = useState('');
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
-  
+
   // Flipkart style address picker states
   const [addressSearchQuery, setAddressSearchQuery] = useState('');
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
@@ -987,7 +986,7 @@ export default function HomeScreen({ navigation }) {
               showsVerticalScrollIndicator={false} 
               contentContainerStyle={styles.addressModalScroll}
               keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardDismissMode="none"
             >
               {isAddingNewAddress ? (
                 /* ADD NEW ADDRESS FORM */
@@ -1314,7 +1313,7 @@ export default function HomeScreen({ navigation }) {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
       <View style={styles.addressModalOverlay}>
         <TouchableOpacity
@@ -1340,11 +1339,11 @@ export default function HomeScreen({ navigation }) {
           </View>
 
           <ScrollView
-            ref={slotBookingScrollRef}
+            style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 30, gap: 18 }}
+            keyboardDismissMode="none"
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40, gap: 18 }}
           >
             
             {/* Consultation Type Display (Single Service) */}
@@ -1451,7 +1450,6 @@ export default function HomeScreen({ navigation }) {
                 value={bookingNotes}
                 onChangeText={setBookingNotes}
                 multiline
-                onFocus={() => setTimeout(() => slotBookingScrollRef.current?.scrollToEnd({ animated: true }), 300)}
               />
             </View>
 

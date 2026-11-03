@@ -429,7 +429,7 @@ export default function SupportTicketScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { fontFamily: fonts.bold, color: theme.text.primary }]}>SUBJECT</Text>
                 <TextInput
