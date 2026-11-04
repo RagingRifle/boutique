@@ -1537,8 +1537,12 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
       await loadOrders(true);
     } catch (err) {
       console.error('Failed to update status:', err);
-      if (status === 'PROCESSING' && /measurement|stitching/i.test(err.message || '')) {
-        setMeasurementPrompt({ order: orderBeforeUpdate, reason: orderBeforeUpdate?.status === 'PENDING' ? 'phase-skipped' : 'blocked' });
+      if (status === 'PROCESSING') {
+        setMeasurementPrompt({
+          order: orderBeforeUpdate || orders.find(order => order.id === id) || selectedOrder,
+          reason: orderBeforeUpdate?.status === 'PENDING' ? 'phase-skipped' : 'blocked',
+          detail: err.message || '',
+        });
       } else {
         alert(err.message || 'Status update failed.');
       }
@@ -1977,8 +1981,12 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
         setMeasurementPrompt({ order: { ...selectedOrder, ...updatedOrder }, reason: 'phase-entry' });
       }
     } catch (err) {
-      if (editOrderStatus === 'PROCESSING' && /measurement|stitching/i.test(err.message || '')) {
-        setMeasurementPrompt({ order: selectedOrder, reason: selectedOrder.status === 'PENDING' ? 'phase-skipped' : 'blocked' });
+      if (editOrderStatus === 'PROCESSING') {
+        setMeasurementPrompt({
+          order: selectedOrder,
+          reason: selectedOrder.status === 'PENDING' ? 'phase-skipped' : 'blocked',
+          detail: err.message || '',
+        });
       } else {
         alert(err.message || 'Failed to save order changes.');
       }
@@ -4828,9 +4836,12 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
 
       {measurementPrompt && (
         <div className="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4">
-            <div>
-              <h3 className="text-base font-black text-slate-900">
+          <div className="w-full max-w-md overflow-hidden rounded-[26px] border border-brand-100 bg-white shadow-2xl">
+            <div className="p-6 pb-5">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                <Ruler className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-black tracking-tight text-slate-900">
                 {measurementPrompt.reason === 'phase-entry' ? 'Measurement session started' : 'Measurement not assigned'}
               </h3>
               <p className="mt-2 text-sm text-slate-600">
@@ -4840,30 +4851,29 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
                     ? 'Record new measurements or assign an existing customer profile to this order before stitching.'
                     : 'This order cannot move to stitching until a measurement profile with at least three recorded dimensions is assigned.'}
               </p>
+              {measurementPrompt.detail && (
+                <p className="mt-2 rounded-xl bg-brand-50/70 px-3 py-2 text-xs font-medium text-brand-800">{measurementPrompt.detail}</p>
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col gap-2 border-t border-brand-50 bg-[#fbf8fc] p-5 sm:flex-row">
               <button
                 type="button"
                 onClick={() => openOrderMeasurementEditor(measurementPrompt.order, 'existing')}
-                className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                className="flex-1 rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-xs font-bold text-brand-800 transition-colors hover:bg-brand-50"
               >
                 Assign Existing Measurement
               </button>
               <button
                 type="button"
                 onClick={() => openOrderMeasurementEditor(measurementPrompt.order, 'new')}
-                className="flex-1 rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800"
+                className="flex-1 rounded-xl bg-brand-700 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-brand-800"
               >
                 Record New Measurement
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setMeasurementPrompt(null)}
-              className="w-full rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
-            >
-              Later
-            </button>
+            <div className="px-5 pb-4 text-center">
+              <button type="button" onClick={() => setMeasurementPrompt(null)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50">Later</button>
+            </div>
           </div>
         </div>
       )}
