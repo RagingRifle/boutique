@@ -1531,10 +1531,10 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
         setSelectedOrder(prev => ({ ...prev, status }));
       }
       await api.updateOrderStatus(id, status);
-      await loadOrders(true);
       if (status === 'PAID' && orderBeforeUpdate?.status === 'PENDING') {
         setMeasurementPrompt({ order: orderBeforeUpdate, reason: 'phase-entry' });
       }
+      await loadOrders(true);
     } catch (err) {
       console.error('Failed to update status:', err);
       if (status === 'PROCESSING' && /measurement|stitching/i.test(err.message || '')) {
@@ -1617,8 +1617,11 @@ export default function OrderManager({ initialTab = 'bookings', isActive }) {
 
   const confirmStatusChange = async () => {
     if (!pendingStatusChange) return;
-    await handleUpdateStatus(pendingStatusChange.orderId, pendingStatusChange.to);
+    const { orderId, to } = pendingStatusChange;
     setPendingStatusChange(null);
+    // The row is updated optimistically by handleUpdateStatus. Do not keep the
+    // confirmation modal open while the API request and background refresh run.
+    void handleUpdateStatus(orderId, to);
   };
 
   const getLocalDayBounds = (date) => {
